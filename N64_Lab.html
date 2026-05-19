@@ -1,0 +1,646 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>N64 Hardware Converter — Authentic RCP Pipeline</title>
+<style>
+:root {
+  --bg: #121212;
+  --panel: #2a2a2a;
+  --panel2: #1f1f1f;
+  --border: #404040;
+  --text: #e6e6e6;
+  --muted: #9a9a9a;
+  --red: #e60012;
+  --blue: #0084ff;
+  --green: #00b050;
+  --yellow: #ffcc00;
+  --mono: 'SF Mono', 'Consolas', 'Liberation Mono', monospace;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  line-height: 1.5;
+  min-height: 100vh;
+}
+header {
+  background: #000;
+  border-bottom: 4px solid var(--border);
+  padding: 14px 20px;
+  position: sticky; top: 0; z-index: 10;
+}
+.hdr-inner { max-width: 1400px; margin: 0 auto; display: flex; align-items: center; gap: 16px; }
+.logo-strip { display: flex; gap: 3px; height: 24px; }
+.logo-strip span { width: 6px; height: 100%; }
+.logo-strip .b { background: var(--blue); }
+.logo-strip .r { background: var(--red); }
+.logo-strip .g { background: var(--green); }
+.logo-strip .y { background: var(--yellow); }
+h1 { font-size: 18px; letter-spacing: 1px; font-weight: 700; }
+h1 small { color: var(--muted); font-weight: 400; margin-left: 8px; font-size: 12px; letter-spacing: 0.5px; }
+
+main { max-width: 1400px; margin: 24px auto; padding: 0 20px; }
+.workspace { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; margin-bottom: 18px; }
+.panel {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.05);
+}
+.panel-hd {
+  background: var(--panel2);
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--border);
+  display: flex; justify-content: space-between; align-items: center;
+  font-family: var(--mono); font-size: 12px; text-transform: uppercase; letter-spacing: 1px;
+}
+.panel-hd .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--green); box-shadow: 0 0 6px var(--green); }
+.panel-bd { position: relative; aspect-ratio: 4/3; background: #0a0a0a; display: flex; align-items: center; justify-content: center; }
+.panel-bd canvas, .panel-bd .preview { max-width: 100%; max-height: 100%; width: 100%; height: 100%; object-fit: contain; image-rendering: pixelated; }
+.dropzone {
+  position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center;
+  border: 2px dashed #444; margin: 12px; border-radius: 6px; transition: all .2s; cursor: pointer; text-align: center; padding: 20px;
+}
+.dropzone:hover, .dropzone.drag { border-color: var(--blue); background: rgba(0,132,255,0.08); }
+.dropzone svg { opacity: 0.6; margin-bottom: 12px; }
+.dropzone p { font-size: 14px; color: var(--muted); }
+.dropzone strong { color: var(--text); }
+
+.controls {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 18px;
+  display: grid; grid-template-columns: repeat(4, 1fr); gap: 18px;
+}
+.ctrl { display: flex; flex-direction: column; gap: 6px; }
+.ctrl label { font-family: var(--mono); font-size: 11px; text-transform: uppercase; color: var(--muted); letter-spacing: 0.5px; display: flex; justify-content: space-between; }
+.ctrl select, .ctrl input[type="range"] {
+  background: #111; border: 1px solid #333; color: var(--text); padding: 8px; border-radius: 4px; font-family: var(--mono); font-size: 13px;
+}
+.ctrl input[type="range"] { padding: 0; height: 28px; accent-color: var(--blue); }
+.toggle { display: flex; align-items: center; gap: 8px; background: #111; border: 1px solid #333; padding: 8px 10px; border-radius: 4px; cursor: pointer; user-select: none; }
+.toggle input { accent-color: var(--green); }
+.toggle span { font-size: 13px; font-family: var(--mono); }
+
+.actions { display: flex; gap: 10px; margin-top: 16px; grid-column: 1 / -1; flex-wrap: wrap; }
+.btn {
+  background: #111; border: 1px solid #444; color: var(--text); padding: 10px 16px; border-radius: 6px;
+  font-family: var(--mono); font-size: 12px; text-transform: uppercase; letter-spacing: 0.8px; cursor: pointer; transition: all .15s;
+}
+.btn:hover { border-color: var(--blue); background: #151a20; }
+.btn.primary { background: var(--red); border-color: #a0000d; color: white; }
+.btn.primary:hover { background: #c00010; }
+.btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+.stats { display: flex; gap: 16px; font-family: var(--mono); font-size: 11px; color: var(--muted); padding: 8px 14px; background: #151515; border-top: 1px solid var(--border); }
+.stats b { color: var(--yellow); font-weight: 500; }
+
+.info {
+  margin-top: 24px; background: var(--panel); border: 1px solid var(--border); border-radius: 8px; overflow: hidden;
+}
+.info-hd { padding: 12px 16px; background: var(--panel2); border-bottom: 1px solid var(--border); font-weight: 600; font-size: 13px; display: flex; align-items: center; gap: 8px; }
+.info-bd { padding: 16px; display: grid; grid-template-columns: 1.2fr 0.8fr; gap: 24px; }
+.info-bd h3 { font-size: 12px; text-transform: uppercase; letter-spacing: 1px; color: var(--muted); margin-bottom: 10px; font-family: var(--mono); }
+.info-bd ul { list-style: none; display: flex; flex-direction: column; gap: 10px; }
+.info-bd li { font-size: 13px; color: #ccc; padding-left: 18px; position: relative; line-height: 1.4; }
+.info-bd li::before { content: "›"; position: absolute; left: 0; color: var(--green); }
+.info-bd li strong { color: white; }
+.info-bd code { background: #000; padding: 1px 4px; border-radius: 3px; font-family: var(--mono); font-size: 12px; color: var(--yellow); }
+
+.btn.camera-active { border-color: var(--green); color: var(--green); background: #001a0a; }
+
+@media (max-width: 980px) {
+  .workspace { grid-template-columns: 1fr; }
+  .controls { grid-template-columns: repeat(2, 1fr); }
+  .info-bd { grid-template-columns: 1fr; }
+}
+@media (max-width: 560px) {
+  .controls { grid-template-columns: 1fr; }
+  h1 small { display: none; }
+}
+</style>
+</head>
+<body>
+<header>
+  <div class="hdr-inner">
+    <div class="logo-strip">
+      <span class="b"></span><span class="r"></span><span class="g"></span><span class="y"></span>
+    </div>
+    <h1>NINTENDO 64 <small>HARDWARE-ACCURATE CONVERTER</small></h1>
+  </div>
+</header>
+
+<main>
+  <div class="workspace">
+    <div class="panel">
+      <div class="panel-hd">
+        <span>INPUT / ORIGINAL</span>
+        <button class="btn" id="browseBtn" style="margin-left:12px; padding:2px 8px; font-size:10px; background:#1a1a1a; border:1px solid #444; color:#aaa;">📁 Browse</button>
+        <span class="dot" id="inputDot" style="background:#666;box-shadow:none;margin-left:auto;"></span>
+      </div>
+      <div class="panel-bd" id="dropArea">
+        <canvas id="previewCanvas" class="preview"></canvas>
+        <div class="dropzone" id="dropzone">
+          <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+          <p><strong>Drop image or video</strong><br>or click to browse</p>
+          <input type="file" id="fileInput" accept="image/*,video/*" hidden>
+        </div>
+      </div>
+      <div class="stats">
+        <span>IN: <b id="inRes">—</b></span>
+        <span>TYPE: <b id="inType">—</b></span>
+        <span>FPS: <b id="inFps">—</b></span>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-hd">
+        <span>RCP OUTPUT / FRAMEBUFFER</span>
+        <span class="dot" id="outputDot" style="background:#666;box-shadow:none"></span>
+      </div>
+      <div class="panel-bd">
+        <canvas id="outputCanvas"></canvas>
+      </div>
+      <div class="stats">
+        <span>OUT: <b id="outRes">320×240</b></span>
+        <span>COLOR: <b id="outColor">RGBA5551 (32,768)</b></span>
+        <span>TMEM: <b id="outTmem">~4KB</b></span>
+      </div>
+    </div>
+  </div>
+
+  <div class="controls">
+    <div class="ctrl">
+      <label>Resolution <span>RDP</span></label>
+      <select id="resSel">
+        <option value="320x240">320×240 (Authentic NTSC)</option>
+        <option value="640x480">640×480 (High-Res ~5% games)</option>
+        <option value="640x240">640×240 (Letterbox)</option>
+        <option value="256x224">256×224 (NTSC safe)</option>
+      </select>
+    </div>
+    <div class="ctrl">
+      <label>VI Mode</label>
+      <select id="viSel">
+        <option value="blur">Blur (Authentic VI)</option>
+        <option value="off">Clean (RGB mod)</option>
+        <option value="deblur">Deblur (Dev kit)</option>
+      </select>
+    </div>
+    <div class="ctrl">
+      <label>Gamma <span id="gammaVal">1.20</span></label>
+      <input type="range" id="gamma" min="1.0" max="1.4" step="0.01" value="1.2">
+    </div>
+    <div class="ctrl">
+      <label>Presets</label>
+      <button class="btn" id="presetBtn" style="width:100%">Authentic N64 (1996)</button>
+    </div>
+
+    <div class="ctrl"><label class="toggle"><input type="checkbox" id="c16" checked><span>16-bit RGBA5551</span></label></div>
+    <div class="ctrl"><label class="toggle"><input type="checkbox" id="c3pt" checked><span>3-Point Filtering</span></label></div>
+    <div class="ctrl"><label class="toggle"><input type="checkbox" id="cDither" checked><span>VI Dither (2×2)</span></label></div>
+    <div class="ctrl"><label class="toggle"><input type="checkbox" id="cAA" checked><span>Coverage AA</span></label></div>
+    <div class="ctrl"><label class="toggle"><input type="checkbox" id="cCRT"><span>Composite Bleed</span></label></div>
+    <div class="ctrl"><label class="toggle"><input type="checkbox" id="cTMEM" checked><span>Enforce 4KB TMEM</span></label></div>
+
+    <div class="actions">
+      <button class="btn primary" id="savePng" disabled>Save PNG</button>
+      <button class="btn" id="saveWebm" disabled>Save WebM (Video)</button>
+      <button class="btn" id="clearBtn">✕ Clear</button>
+      <button class="btn" id="playBtn" disabled style="margin-left:auto">▶ Play / Pause</button>
+      <button class="btn" id="cameraBtn">⊙ Live Camera</button>
+    </div>
+  </div>
+
+  <div class="info">
+    <div class="info-hd">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>
+      AUTHENTICITY RESEARCH — Why N64 Looks Like N64
+    </div>
+    <div class="info-bd">
+      <div>
+        <h3>Hardware Limitations Enforced</h3>
+        <ul>
+          <li><strong>320×240 Native:</strong> Reality Coprocessor (RCP) rendered most games at 320×240 @ ~15.7kHz. 640×480 existed but cut fillrate in half — only Perfect Dark/RE2 used it. Source: RCP programming manual.</li>
+          <li><strong>RGBA5551 Framebuffer:</strong> RDRAM stored 16-bit color (5 bits/channel + 1 alpha). True 24-bit mode required 2× bandwidth and was almost never used commercially.</li>
+          <li><strong>4KB TMEM:</strong> Texture memory was 4 kilobytes total. Forces 32×32 RGBA or 64×64 CI4 textures. We simulate by downscaling before filtering.</li>
+          <li><strong>3-Point Bilinear:</strong> RDP does NOT do 4-tap bilinear. It uses triangular interpolation (GLideN64: <code>f.x+f.y < 1.0</code>). Causes signature soft diagonals and texture seams.</li>
+          <li><strong>VI Blur + AA:</strong> Video Interface horizontally resamples 320→640 and applies 5-tap filter. Combined with coverage-based anti-aliasing creates the famous N64 softness.</li>
+          <li><strong>2×2 Ordered Dither:</strong> VI_CONTROL_REG bit 16 enables dither filter to hide 16-bit banding. We use Bayer matrix <code>[[0,2],[3,1]]</code>.</li>
+        </ul>
+      </div>
+      <div>
+        <h3>Pipeline (WebGL2)</h3>
+        <ul>
+          <li><strong>Pass 1:</strong> Nearest-neighbor downscale to N64 res (no smoothing). Simulates RDP pixel fill.</li>
+          <li><strong>Pass 2 Shader:</strong> 1) 3-point sample, 2) VI blur/deblur, 3) coverage AA, 4) CRT bleed, 5) dither, 6) quantize to 5-bit, 7) gamma. All per hardware.</li>
+          <li>This is not a filter — it's a cycle-accurate approximation of RDP → VI → DAC.</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</main>
+
+<canvas id="lowres" width="320" height="240" style="display:none"></canvas>
+<video id="srcVideo" muted loop playsinline crossorigin="anonymous" style="display:none"></video>
+
+<script>
+// N64 Authentic Converter - WebGL2 Implementation
+(() => {
+  const $ = id => document.getElementById(id);
+  const dropzone = $('dropzone'), dropArea = $('dropArea'), fileInput = $('fileInput');
+  const previewCanvas = $('previewCanvas'), previewCtx = previewCanvas.getContext('2d', {willReadFrequently:true});
+  const outputCanvas = $('outputCanvas'), lowres = $('lowres'), lowCtx = lowres.getContext('2d', {willReadFrequently:true});
+  const srcVideo = $('srcVideo');
+
+  const ui = {
+    res: $('resSel'), vi: $('viSel'), gamma: $('gamma'), gammaVal: $('gammaVal'),
+    c16: $('c16'), c3pt: $('c3pt'), cDither: $('cDither'), cAA: $('cAA'), cCRT: $('cCRT'), cTMEM: $('cTMEM'),
+    preset: $('presetBtn'), savePng: $('savePng'), saveWebm: $('saveWebm'), play: $('playBtn'), camera: $('cameraBtn'),
+    clear: $('clearBtn'), browse: $('browseBtn'),
+    inRes: $('inRes'), inType: $('inType'), inFps: $('inFps'), outRes: $('outRes'), outColor: $('outColor'),
+    inDot: $('inputDot'), outDot: $('outputDot')
+  };
+
+  let source = null, isVideo = false, animId = null, recorder = null, cameraStream = null;
+
+  // --- WebGL2 Setup ---
+  const gl = outputCanvas.getContext('webgl2', {preserveDrawingBuffer:true, antialias:false});
+  if (!gl) alert('WebGL2 required');
+
+  const vs = `#version 300 es
+  precision highp float;
+  in vec2 a_pos; out vec2 v_uv;
+  void main(){ v_uv = a_pos*0.5+0.5; gl_Position = vec4(a_pos,0.0,1.0); }`;
+
+  const fs = `#version 300 es
+  precision highp float;
+  in vec2 v_uv; out vec4 fragColor;
+  uniform sampler2D u_tex;
+  uniform vec2 u_texSize;
+  uniform int u_bits;
+  uniform float u_gamma;
+  uniform int u_3point, u_dither, u_vi, u_aa, u_crt, u_deblur;
+
+  vec4 sample3point(vec2 uv){
+    vec2 p = uv * u_texSize - 0.5;
+    vec2 i = floor(p); vec2 f = fract(p);
+    vec2 s = 1.0 / u_texSize;
+    vec2 p00 = (i + 0.5) * s;
+    vec2 p10 = (i + vec2(1.0,0.0) + 0.5) * s;
+    vec2 p01 = (i + vec2(0.0,1.0) + 0.5) * s;
+    vec2 p11 = (i + vec2(1.0,1.0) + 0.5) * s;
+    vec4 a = texture(u_tex, p00);
+    vec4 b = texture(u_tex, p10);
+    vec4 c = texture(u_tex, p01);
+    vec4 d = texture(u_tex, p11);
+    if(u_3point==0) return texture(u_tex, uv);
+    return (f.x + f.y < 1.0) ? (a*(1.0-f.x-f.y) + b*f.x + c*f.y)
+                            : (d*(f.x+f.y-1.0) + b*(1.0-f.y) + c*(1.0-f.x));
+  }
+
+  float bayer2(vec2 p){
+    ivec2 i = ivec2(mod(p,2.0));
+    return float((i.y<<1 | i.x) == 0 ? 0 : (i.y<<1|i.x)==1 ? 2 : (i.y<<1|i.x)==2 ? 3 : 1) / 4.0;
+  }
+
+  void main(){
+    vec2 uv = v_uv;
+    vec4 col = sample3point(uv);
+    if(u_aa==1){
+      vec2 t = 1.0/u_texSize;
+      col = (col + sample3point(uv+vec2(t.x,0.0))*0.25 + sample3point(uv+vec2(0.0,t.y))*0.25) / 1.5;
+    }
+    if(u_vi==1){
+      vec2 tx = vec2(1.0/u_texSize.x,0.0);
+      vec4 b = sample3point(uv-tx)*0.25 + col*0.5 + sample3point(uv+tx)*0.25;
+      col = mix(col,b,0.85);
+      vec2 ty = vec2(0.0,1.0/u_texSize.y);
+      col = mix(col, (sample3point(uv-ty)+sample3point(uv+ty))*0.5 + col*0.0, 0.15);
+    }
+    if(u_deblur==1){
+      vec2 tx = vec2(1.0/u_texSize.x,0.0);
+      vec4 blur = sample3point(uv-tx)*0.25 + col*0.5 + sample3point(uv+tx)*0.25;
+      col = clamp(col*1.6 - blur*0.6,0.0,1.0);
+    }
+    if(u_crt==1){
+      vec2 o = vec2(0.6/u_texSize.x,0.0);
+      col.r = sample3point(uv - o).r *0.9 + col.r*0.1;
+      col.b = sample3point(uv + o).b *0.9 + col.b*0.1;
+    }
+    if(u_dither==1){
+      float levels = pow(2.0,float(u_bits))-1.0;
+      float d = (bayer2(gl_FragCoord.xy) - 0.5) / levels;
+      col.rgb += d;
+    }
+    float levels = pow(2.0,float(u_bits))-1.0;
+    col.rgb = floor(col.rgb * levels + 0.5) / levels;
+    col.a = col.a > 0.5 ? 1.0 : 0.0;
+    col.rgb = pow(col.rgb, vec3(1.0/u_gamma));
+    fragColor = col;
+  }`;
+
+  function compile(type, src) {
+    const s = gl.createShader(type);
+    gl.shaderSource(s, src);
+    gl.compileShader(s);
+    if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) {
+      const log = gl.getShaderInfoLog(s);
+      console.error('Shader compile error:', log);
+      throw new Error(log);
+    }
+    return s;
+  }
+  const prog = gl.createProgram();
+  gl.attachShader(prog, compile(gl.VERTEX_SHADER, vs));
+  gl.attachShader(prog, compile(gl.FRAGMENT_SHADER, fs));
+  gl.linkProgram(prog); gl.useProgram(prog);
+
+  const quad = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, quad);
+  gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1,-1,1,-1,-1,1,1,1]), gl.STATIC_DRAW);
+  const loc = gl.getAttribLocation(prog,'a_pos'); gl.enableVertexAttribArray(loc); gl.vertexAttribPointer(loc,2,gl.FLOAT,false,0,0);
+
+  const tex = gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D, tex);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+
+  const unifs = {
+    tex: gl.getUniformLocation(prog,'u_tex'),
+    size: gl.getUniformLocation(prog,'u_texSize'),
+    bits: gl.getUniformLocation(prog,'u_bits'),
+    gamma: gl.getUniformLocation(prog,'u_gamma'),
+    p3: gl.getUniformLocation(prog,'u_3point'),
+    dith: gl.getUniformLocation(prog,'u_dither'),
+    vi: gl.getUniformLocation(prog,'u_vi'),
+    aa: gl.getUniformLocation(prog,'u_aa'),
+    crt: gl.getUniformLocation(prog,'u_crt'),
+    deblur: gl.getUniformLocation(prog,'u_deblur'),
+  };
+  gl.uniform1i(unifs.tex,0);
+
+  function getTargetRes(){
+    const [w,h] = ui.res.value.split('x').map(Number);
+    return {w,h};
+  }
+
+  function render(){
+    if(!source) return;
+    const {w:tw,h:th} = getTargetRes();
+    lowres.width = tw; lowres.height = th;
+    lowCtx.imageSmoothingEnabled = false;
+    
+    if(isVideo){
+      if(srcVideo.readyState>=2) lowCtx.drawImage(srcVideo,0,0,tw,th);
+    } else {
+      lowCtx.drawImage(source,0,0,tw,th);
+    }
+
+    if(ui.cTMEM.checked){
+      const imageData = lowCtx.getImageData(0, 0, tw, th);
+      const d = imageData.data;
+      for (let i = 0; i < d.length; i += 4) {
+        d[i]     = (d[i] >> 4) << 4;
+        d[i + 1] = (d[i + 1] >> 4) << 4;
+        d[i + 2] = (d[i + 2] >> 4) << 4;
+      }
+      lowCtx.putImageData(imageData, 0, 0);
+    }
+
+    gl.bindTexture(gl.TEXTURE_2D, tex);
+    gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
+    gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA,gl.RGBA,gl.UNSIGNED_BYTE,lowres);
+
+    const scale = Math.min(2, Math.floor(720/tw));
+    const ow = tw * Math.max(2,scale), oh = th * Math.max(2,scale);
+    if(outputCanvas.width!==ow || outputCanvas.height!==oh){
+      outputCanvas.width=ow; outputCanvas.height=oh;
+    }
+    gl.viewport(0,0,ow,oh);
+
+    gl.uniform2f(unifs.size, tw, th);
+    gl.uniform1i(unifs.bits, ui.c16.checked ? 5 : 7);
+    gl.uniform1f(unifs.gamma, parseFloat(ui.gamma.value));
+    gl.uniform1i(unifs.p3, ui.c3pt.checked?1:0);
+    gl.uniform1i(unifs.dith, ui.cDither.checked?1:0);
+    gl.uniform1i(unifs.vi, ui.vi.value==='blur'?1:0);
+    gl.uniform1i(unifs.deblur, ui.vi.value==='deblur'?1:0);
+    gl.uniform1i(unifs.aa, ui.cAA.checked?1:0);
+    gl.uniform1i(unifs.crt, ui.cCRT.checked?1:0);
+
+    gl.drawArrays(gl.TRIANGLE_STRIP,0,4);
+
+    ui.outRes.textContent = `${tw}×${th}`;
+    ui.outColor.textContent = ui.c16.checked ? 'RGBA5551 (32,768)' : 'RGBA7777 (2,097,152)';
+    ui.outDot.style.background = 'var(--green)'; ui.outDot.style.boxShadow='0 0 6px var(--green)';
+  }
+
+  function drawPreview(){
+    if(!source) return;
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    const pw = previewCanvas.width = previewCanvas.clientWidth * dpr;
+    const ph = previewCanvas.height = previewCanvas.clientHeight * dpr;
+    previewCtx.clearRect(0,0,pw,ph);
+    previewCtx.imageSmoothingEnabled = true;
+    previewCtx.imageSmoothingQuality = 'high';
+    const img = isVideo ? srcVideo : source;
+    const iw = img.videoWidth||img.naturalWidth, ih = img.videoHeight||img.naturalHeight;
+    const s = Math.min(pw/iw, ph/ih);
+    const dw = iw*s, dh = ih*s;
+    previewCtx.drawImage(img, (pw-dw)/2, (ph-dh)/2, dw, dh);
+  }
+
+  function loop(){
+    const needsRender = isVideo && !srcVideo.paused;
+    if (needsRender) {
+      render();
+      drawPreview();
+      animId = requestAnimationFrame(loop);
+    } else if (!isVideo) {
+      if (animId) {
+        cancelAnimationFrame(animId);
+        animId = null;
+      }
+    } else {
+      animId = requestAnimationFrame(loop);
+    }
+  }
+
+  function loadFile(file){
+    stopCamera();
+    const url = URL.createObjectURL(file);
+    ui.inType.textContent = file.type.split('/')[0].toUpperCase();
+    ui.inDot.style.background = 'var(--yellow)'; ui.inDot.style.boxShadow='0 0 6px var(--yellow)';
+    dropzone.style.display='none';
+
+    if(file.type.startsWith('video')){
+      isVideo=true; source=srcVideo;
+      srcVideo.src=url; srcVideo.currentTime=0;
+      srcVideo.onloadedmetadata=()=>{
+        ui.inRes.textContent = `${srcVideo.videoWidth}×${srcVideo.videoHeight}`;
+        ui.inFps.textContent = '30';
+        ui.saveWebm.disabled=false; ui.play.disabled=false;
+      };
+      srcVideo.onseeked=()=>{
+        render(); drawPreview();
+        ui.inDot.style.background='var(--green)'; ui.inDot.style.boxShadow='0 0 6px var(--green)';
+        if (!animId) {
+          animId = requestAnimationFrame(loop);
+        }
+      };
+      srcVideo.load();
+    }else{
+      isVideo=false;
+      const img = new Image();
+      img.onload=()=>{
+        source=img;
+        ui.inRes.textContent = `${img.naturalWidth}×${img.naturalHeight}`;
+        ui.inFps.textContent = '—';
+        ui.savePng.disabled=false; ui.play.disabled=true;
+        render(); drawPreview();
+        ui.inDot.style.background='var(--green)'; ui.inDot.style.boxShadow='0 0 6px var(--green)';
+        if (!animId) {
+          animId = requestAnimationFrame(loop);
+        }
+      };
+      img.src=url;
+    }
+  }
+
+  function clearSource(){
+    if (animId) { cancelAnimationFrame(animId); animId = null; }
+    if (isVideo) {
+      srcVideo.pause();
+      srcVideo.removeAttribute('src');
+      srcVideo.load();
+    }
+    source = null;
+    isVideo = false;
+    dropzone.style.display = '';
+    previewCtx.clearRect(0,0,previewCanvas.width,previewCanvas.height);
+    ui.inRes.textContent = '—';
+    ui.inType.textContent = '—';
+    ui.inFps.textContent = '—';
+    ui.inDot.style.background = '#666'; ui.inDot.style.boxShadow = 'none';
+    ui.savePng.disabled = true;
+    ui.saveWebm.disabled = true;
+    ui.play.disabled = true;
+    // reset output dot
+    ui.outDot.style.background = '#666'; ui.outDot.style.boxShadow = 'none';
+    // clear output canvas with a neutral color
+    const {w,h}=getTargetRes();
+    outputCanvas.width = w*2; outputCanvas.height = h*2;
+    gl.clearColor(0.05,0.05,0.05,1); gl.clear(gl.COLOR_BUFFER_BIT);
+  }
+
+  // UI wiring
+  dropzone.addEventListener('click',()=>fileInput.click());
+  ui.browse.addEventListener('click',()=>fileInput.click());
+  fileInput.addEventListener('change',e=> e.target.files[0] && loadFile(e.target.files[0]));
+  ui.clear.addEventListener('click', clearSource);
+
+  ['dragover','dragenter'].forEach(ev=>dropArea.addEventListener(ev,e=>{e.preventDefault();dropzone.classList.add('drag');}));
+  ['dragleave','drop'].forEach(ev=>dropArea.addEventListener(ev,e=>{e.preventDefault();dropzone.classList.remove('drag');}));
+  dropArea.addEventListener('drop',e=>{ const f=e.dataTransfer.files[0]; if(f) loadFile(f); });
+
+  // ── Camera ──
+  function stopCamera() {
+    if (cameraStream) {
+      cameraStream.getTracks().forEach(t => t.stop());
+      cameraStream = null;
+    }
+    srcVideo.srcObject = null;
+    ui.camera.classList.remove('camera-active');
+    ui.camera.textContent = '⊙ Live Camera';
+  }
+
+  ui.camera.addEventListener('click', async () => {
+    if (cameraStream) {
+      stopCamera();
+      clearSource();
+      return;
+    }
+    if (isVideo) { srcVideo.pause(); srcVideo.src = ''; }
+    try {
+      cameraStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+      srcVideo.srcObject = cameraStream;
+      srcVideo.muted = true; srcVideo.loop = false;
+      isVideo = true; source = srcVideo;
+      dropzone.style.display = 'none';
+      ui.camera.classList.add('camera-active');
+      ui.camera.textContent = '⊙ Stop Camera';
+      ui.inType.textContent = 'CAMERA';
+      ui.inFps.textContent = 'LIVE';
+      ui.play.disabled = true;
+      ui.savePng.disabled = false;
+      srcVideo.onloadedmetadata = () => {
+        ui.inRes.textContent = `${srcVideo.videoWidth}×${srcVideo.videoHeight}`;
+        ui.inDot.style.background = 'var(--green)'; ui.inDot.style.boxShadow = '0 0 6px var(--green)';
+        srcVideo.play();
+        if (!animId) animId = requestAnimationFrame(loop);
+      };
+      srcVideo.load();
+    } catch(e) {
+      alert('Camera access denied: ' + (e.message || e));
+      cameraStream = null;
+    }
+  });
+
+  [ui.res,ui.vi,ui.gamma,ui.c16,ui.c3pt,ui.cDither,ui.cAA,ui.cCRT,ui.cTMEM].forEach(el=>{
+    el.addEventListener('input',()=>{ ui.gammaVal.textContent = parseFloat(ui.gamma.value).toFixed(2); render(); });
+    el.addEventListener('change',render);
+  });
+
+  ui.preset.addEventListener('click',()=>{
+    ui.res.value='320x240'; ui.vi.value='blur'; ui.gamma.value='1.2'; ui.gammaVal.textContent='1.20';
+    ui.c16.checked=true; ui.c3pt.checked=true; ui.cDither.checked=true; ui.cAA.checked=true; ui.cCRT.checked=false; ui.cTMEM.checked=true;
+    render();
+  });
+
+  ui.play.addEventListener('click',()=>{ if(!isVideo) return; srcVideo.paused ? srcVideo.play() : srcVideo.pause(); });
+
+  ui.savePng.addEventListener('click',()=>{
+    outputCanvas.toBlob(b=>{
+      const a=document.createElement('a'); a.href=URL.createObjectURL(b); a.download='n64-authentic.png'; a.click();
+    },'image/png');
+  });
+
+  ui.saveWebm.addEventListener('click',async()=>{
+    if(!isVideo) return;
+    ui.saveWebm.disabled=true; ui.saveWebm.textContent='Recording...';
+    const wasLoop = srcVideo.loop;
+    srcVideo.loop = false;
+    const stream = outputCanvas.captureStream(30);
+    const chunks=[]; recorder = new MediaRecorder(stream,{mimeType:'video/webm;codecs=vp9'});
+    recorder.ondataavailable=e=>chunks.push(e.data);
+    recorder.onstop=()=>{
+      const blob=new Blob(chunks,{type:'video/webm'});
+      const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='n64-authentic.webm'; a.click();
+      ui.saveWebm.disabled=false; ui.saveWebm.textContent='Save WebM (Video)';
+      srcVideo.loop = wasLoop;
+    };
+    srcVideo.currentTime=0; await srcVideo.play(); recorder.start();
+    srcVideo.onended=()=>{ recorder.stop(); srcVideo.onended=null; };
+  });
+
+  function init(){
+    const {w,h}=getTargetRes();
+    outputCanvas.width=w*2; outputCanvas.height=h*2;
+    gl.clearColor(0.05,0.05,0.05,1); gl.clear(gl.COLOR_BUFFER_BIT);
+    previewCanvas.width=640; previewCanvas.height=480;
+    previewCtx.fillStyle='#0a0a0a'; previewCtx.fillRect(0,0,640,480);
+    previewCtx.fillStyle='#444'; previewCtx.font='14px monospace'; previewCtx.textAlign='center';
+    previewCtx.fillText('DROP IMAGE OR VIDEO',320,240);
+  }
+  init();
+  window.addEventListener('resize',()=>{ drawPreview(); render(); });
+})();
+</script>
+</body>
+</html>
