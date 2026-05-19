@@ -1,0 +1,621 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DEGLAZER</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: #0e0e0e;
+    color: #c8c4b8;
+    font-family: 'Courier New', Courier, monospace;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+  }
+
+  header {
+    border-bottom: 1px solid #2a2520;
+    padding: 16px 24px;
+    display: flex;
+    align-items: baseline;
+    gap: 16px;
+  }
+  header .logo { font-size: 13px; letter-spacing: 0.3em; color: #8b7355; text-transform: uppercase; }
+  header .sub  { font-size: 11px; color: #4a4540; letter-spacing: 0.1em; }
+
+  .layout {
+    display: flex;
+    flex: 1;
+    min-height: 0;
+    flex-wrap: wrap;
+  }
+
+  /* ── Controls ── */
+  .controls {
+    width: 240px;
+    min-width: 240px;
+    border-right: 1px solid #1e1c18;
+    padding: 20px 16px;
+    background: #0b0b0b;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    overflow-y: auto;
+  }
+  .section-label {
+    font-size: 9px;
+    letter-spacing: 0.25em;
+    color: #4a4540;
+    text-transform: uppercase;
+    margin-bottom: 12px;
+  }
+
+  .param { margin-bottom: 14px; }
+  .param-header {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 5px;
+  }
+  .param-name {
+    font-size: 10px;
+    letter-spacing: 0.1em;
+    color: #8b7a66;
+    text-transform: uppercase;
+  }
+  .param-value {
+    font-size: 10px;
+    color: #c8a96e;
+    font-variant-numeric: tabular-nums;
+    min-width: 28px;
+    text-align: right;
+  }
+
+  .slider-wrap {
+    position: relative;
+    height: 18px;
+    display: flex;
+    align-items: center;
+  }
+  .slider-track {
+    position: absolute;
+    left: 0; right: 0;
+    height: 2px;
+    background: #1e1c18;
+    pointer-events: none;
+  }
+  .slider-fill {
+    position: absolute;
+    left: 0;
+    height: 2px;
+    background: #8b6030;
+    pointer-events: none;
+    width: 0%;
+  }
+  .slider-thumb {
+    position: absolute;
+    width: 10px; height: 10px;
+    background: #c8a96e;
+    border-radius: 50%;
+    pointer-events: none;
+    transform: translateX(-50%);
+  }
+  input[type=range] {
+    position: absolute;
+    width: 100%;
+    opacity: 0;
+    cursor: pointer;
+    height: 18px;
+    margin: 0;
+    -webkit-appearance: none;
+    appearance: none;
+  }
+
+  .tooltip-box {
+    margin-top: 8px;
+    min-height: 36px;
+    font-size: 9px;
+    color: #5a5048;
+    letter-spacing: 0.05em;
+    line-height: 1.5;
+    border-top: 1px solid #1a1814;
+    padding-top: 10px;
+  }
+
+  .btn-group {
+    margin-top: auto;
+    padding-top: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  button {
+    background: none;
+    border: 1px solid #2a2520;
+    color: #6a6058;
+    padding: 7px 0;
+    font-size: 9px;
+    font-family: inherit;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    cursor: pointer;
+    width: 100%;
+    transition: border-color 0.15s, color 0.15s;
+  }
+  button:hover { border-color: #4a4030; color: #8b7a66; }
+  button.primary {
+    background: #4a3018;
+    border-color: #8b6030;
+    color: #c8a96e;
+    padding: 9px 0;
+  }
+  button.primary:hover { background: #5a3820; }
+  button:disabled {
+    background: #1a1814;
+    border-color: #222;
+    color: #3a3530;
+    cursor: not-allowed;
+  }
+
+  /* ── Canvas area ── */
+  .canvas-area {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+    min-width: 0;
+  }
+
+  .drop-zone {
+    width: 100%;
+    max-width: 560px;
+    aspect-ratio: 4/3;
+    border: 1px dashed #2a2520;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    gap: 12px;
+    background: #0d0c0a;
+    transition: border-color 0.2s;
+  }
+  .drop-zone:hover, .drop-zone.drag-over { border-color: #4a4030; }
+  .drop-zone .icon { font-size: 32px; color: #2a2520; }
+  .drop-zone .label { font-size: 10px; letter-spacing: 0.2em; color: #4a4540; text-transform: uppercase; }
+  .drop-zone .hint  { font-size: 9px; color: #2e2c28; }
+
+  .canvas-wrap {
+    position: relative;
+    max-width: 100%;
+    display: none;
+  }
+  .canvas-wrap.visible { display: block; }
+
+  #output {
+    max-width: 100%;
+    max-height: calc(100vh - 140px);
+    display: block;
+    image-rendering: pixelated;
+  }
+
+  .processing-overlay {
+    position: absolute;
+    inset: 0;
+    background: rgba(14,14,14,0.6);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    font-size: 9px;
+    letter-spacing: 0.2em;
+    color: #8b6030;
+    z-index: 10;
+  }
+  .processing-overlay.visible { display: flex; }
+
+  .canvas-meta {
+    margin-top: 8px;
+    display: flex;
+    justify-content: space-between;
+    font-size: 9px;
+    color: #3a3530;
+    letter-spacing: 0.1em;
+    width: 100%;
+  }
+  .canvas-meta span { cursor: pointer; color: #4a4540; }
+
+  @media (max-width: 600px) {
+    .controls { width: 100%; min-width: 100%; border-right: none; border-bottom: 1px solid #1e1c18; }
+    .layout { flex-direction: column; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <span class="logo">◈ DEGLAZER</span>
+  <span class="sub">AI ART TEXTURE RESTORATION</span>
+</header>
+
+<div class="layout">
+  <div class="controls" id="controls"></div>
+
+  <div class="canvas-area">
+    <div class="drop-zone" id="dropZone">
+      <div class="icon">⊕</div>
+      <div class="label">Drop image/video or click to upload</div>
+      <div class="hint">PNG · JPG · WEBP · MP4 · WEBM</div>
+    </div>
+
+    <div class="canvas-wrap" id="canvasWrap">
+      <div class="processing-overlay" id="processingOverlay">PROCESSING</div>
+      <canvas id="output"></canvas>
+      <div class="canvas-meta">
+        <span id="swapBtn">↑ swap source</span>
+        <span id="cameraIndicator" style="display:none;color:#c8a96e;letter-spacing:0.1em">⊙ LIVE</span>
+        <span id="dimLabel"></span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<input type="file" id="fileInput" accept="image/*,video/*" style="display:none">
+<img id="srcImg" style="display:none" crossorigin="anonymous" alt="">
+<video id="srcVideoEl" style="display:none" muted loop playsinline crossorigin="anonymous"></video>
+
+<script>
+// ── Mode tracking ──
+// mode: 'image' | 'video' | 'camera'
+let mode = 'image';
+let cameraStream = null;
+let videoRafId = null;
+
+const CONTROLS = [
+  { key: "grain",      label: "Film Grain",    min: 0, max: 60,  step: 1,   def: 18,  tip: "Luminance noise — the classic analog feel" },
+  { key: "colorNoise", label: "Color Noise",   min: 0, max: 40,  step: 1,   def: 8,   tip: "Per-channel RGB noise — breaks color uniformity" },
+  { key: "roughness",  label: "Roughness",     min: 0, max: 50,  step: 1,   def: 12,  tip: "Micro-contrast bump — disrupts smooth gradients" },
+  { key: "chromatic",  label: "Chromatic Ab.", min: 0, max: 6,   step: 0.1, def: 1.2, tip: "RGB channel shift — lens fringing artifact" },
+  { key: "halation",   label: "Halation",      min: 0, max: 100, step: 1,   def: 0,   tip: "Highlight bloom — light bleeding past film emulsion" },
+  { key: "vignette",   label: "Vignette",      min: 0, max: 80,  step: 1,   def: 30,  tip: "Edge darkening — optical lens falloff" },
+  { key: "dither",     label: "Dither",        min: 0, max: 20,  step: 1,   def: 0,   tip: "Ordered quantization — breaks banding in flat areas" },
+];
+
+const settings = {};
+CONTROLS.forEach(c => settings[c.key] = c.def);
+
+// ── Build controls UI ──
+const panel = document.getElementById("controls");
+
+const sectionLabel = document.createElement("div");
+sectionLabel.className = "section-label";
+sectionLabel.textContent = "Parameters";
+panel.appendChild(sectionLabel);
+
+const tooltipBox = document.createElement("div");
+tooltipBox.className = "tooltip-box";
+tooltipBox.textContent = "← hover a parameter";
+
+CONTROLS.forEach(c => {
+  const wrap = document.createElement("div");
+  wrap.className = "param";
+
+  wrap.innerHTML = `
+    <div class="param-header">
+      <span class="param-name">${c.label}</span>
+      <span class="param-value" id="val-${c.key}">${c.def.toFixed(c.step < 1 ? 1 : 0)}</span>
+    </div>
+    <div class="slider-wrap">
+      <div class="slider-track"></div>
+      <div class="slider-fill" id="fill-${c.key}"></div>
+      <input type="range" min="${c.min}" max="${c.max}" step="${c.step}" value="${c.def}" id="range-${c.key}">
+      <div class="slider-thumb" id="thumb-${c.key}"></div>
+    </div>
+  `;
+
+  wrap.addEventListener("mouseenter", () => { tooltipBox.textContent = c.tip; });
+  wrap.addEventListener("mouseleave", () => { tooltipBox.textContent = "← hover a parameter"; });
+
+  const range = wrap.querySelector(`#range-${c.key}`);
+  const fill  = wrap.querySelector(`#fill-${c.key}`);
+  const thumb = wrap.querySelector(`#thumb-${c.key}`);
+  const val   = wrap.querySelector(`#val-${c.key}`);
+
+  function updateSlider(v) {
+    const pct = ((v - c.min) / (c.max - c.min)) * 100;
+    fill.style.width = pct + "%";
+    thumb.style.left = pct + "%";
+    val.textContent = parseFloat(v).toFixed(c.step < 1 ? 1 : 0);
+  }
+  updateSlider(c.def);
+
+  range.addEventListener("input", () => {
+    const v = parseFloat(range.value);
+    settings[c.key] = v;
+    updateSlider(v);
+    scheduleProcess();
+  });
+
+  panel.appendChild(wrap);
+});
+
+panel.appendChild(tooltipBox);
+
+// Buttons
+const btnGroup = document.createElement("div");
+btnGroup.className = "btn-group";
+btnGroup.innerHTML = `
+  <button id="cameraBtn">⊙ Live Camera</button>
+  <button id="resetBtn">Reset</button>
+  <button class="primary" id="exportBtn" disabled>Export PNG</button>
+`;
+panel.appendChild(btnGroup);
+
+// ── Logic ──
+const canvas  = document.getElementById("output");
+const srcImg  = document.getElementById("srcImg");
+const srcVideoEl = document.getElementById("srcVideoEl");
+const fileInput = document.getElementById("fileInput");
+const dropZone  = document.getElementById("dropZone");
+const canvasWrap = document.getElementById("canvasWrap");
+const overlay   = document.getElementById("processingOverlay");
+const dimLabel  = document.getElementById("dimLabel");
+const exportBtn = document.getElementById("exportBtn");
+const resetBtn  = document.getElementById("resetBtn");
+const swapBtn   = document.getElementById("swapBtn");
+const cameraBtn = document.getElementById("cameraBtn");
+const cameraIndicator = document.getElementById("cameraIndicator");
+
+let processTimer = null;
+
+function scheduleProcess() {
+  if (mode !== 'image') return; // video/camera use the RAF loop
+  clearTimeout(processTimer);
+  processTimer = setTimeout(process, 60);
+}
+
+// ── Video / Camera RAF loop ──
+function startVideoLoop() {
+  if (videoRafId) cancelAnimationFrame(videoRafId);
+  function tick() {
+    if (mode === 'image') { videoRafId = null; return; }
+    process();
+    videoRafId = requestAnimationFrame(tick);
+  }
+  videoRafId = requestAnimationFrame(tick);
+}
+
+function stopVideoLoop() {
+  if (videoRafId) { cancelAnimationFrame(videoRafId); videoRafId = null; }
+}
+
+function getSource() {
+  return mode === 'image' ? srcImg : srcVideoEl;
+}
+
+function mulberry32(a) {
+  return function () {
+    a |= 0; a = a + 0x6D2B79F5 | 0;
+    let t = Math.imul(a ^ a >>> 15, 1 | a);
+    t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+    return ((t ^ t >>> 14) >>> 0) / 4294967296;
+  };
+}
+
+function clamp(v) { return Math.max(0, Math.min(255, v)); }
+
+function process() {
+  const source = getSource();
+  if (mode === 'image') {
+    if (!srcImg.src || !srcImg.complete || !srcImg.naturalWidth) return;
+  } else {
+    if (!source || source.readyState < 2) return;
+  }
+
+  // Only show overlay for image mode (would flicker badly in video/camera)
+  if (mode === 'image') overlay.classList.add("visible");
+
+  requestAnimationFrame(() => {
+    const W = source.videoWidth  || source.naturalWidth;
+    const H = source.videoHeight || source.naturalHeight;
+    canvas.width  = W;
+    canvas.height = H;
+    const ctx = canvas.getContext("2d");
+
+    const { grain, colorNoise, chromatic, vignette, halation, roughness, dither } = settings;
+
+    // Chromatic aberration
+    if (chromatic > 0) {
+      const shift = Math.round(chromatic);
+      const offR = document.createElement("canvas"); offR.width = W; offR.height = H;
+      const offB = document.createElement("canvas"); offB.width = W; offB.height = H;
+      offR.getContext("2d").drawImage(source, -shift, 0, W + shift, H);
+      offB.getContext("2d").drawImage(source,  shift, 0, W - shift, H);
+      ctx.drawImage(source, 0, 0);
+      const base = ctx.getImageData(0, 0, W, H);
+      const rData = offR.getContext("2d").getImageData(0, 0, W, H);
+      const bData = offB.getContext("2d").getImageData(0, 0, W, H);
+      for (let i = 0; i < base.data.length; i += 4) {
+        base.data[i]     = rData.data[i];
+        base.data[i + 2] = bData.data[i + 2];
+      }
+      ctx.putImageData(base, 0, 0);
+    } else {
+      ctx.drawImage(source, 0, 0);
+    }
+
+    const img = ctx.getImageData(0, 0, W, H);
+    const d = img.data;
+    const rand = mulberry32(mode === 'image' ? 42 : (Date.now() & 0xFFFFFF));
+    const cx = W / 2, cy = H / 2;
+    const maxDist = Math.sqrt(cx * cx + cy * cy);
+
+    for (let y = 0; y < H; y++) {
+      for (let x = 0; x < W; x++) {
+        const idx = (y * W + x) * 4;
+        let r = d[idx], g = d[idx+1], b = d[idx+2];
+
+        if (grain > 0) {
+          const n = (rand() - 0.5) * 2 * grain;
+          r += n; g += n; b += n;
+        }
+        if (colorNoise > 0) {
+          r += (rand() - 0.5) * 2 * colorNoise;
+          g += (rand() - 0.5) * 2 * colorNoise;
+          b += (rand() - 0.5) * 2 * colorNoise;
+        }
+        if (roughness > 0) {
+          const lum = 0.299 * r + 0.587 * g + 0.114 * b;
+          const bump = (rand() - 0.5) * roughness * (lum / 255);
+          r += bump; g += bump; b += bump;
+        }
+        if (dither > 0) {
+          const q = dither;
+          r = Math.round(r / q) * q + rand() * q;
+          g = Math.round(g / q) * q + rand() * q;
+          b = Math.round(b / q) * q + rand() * q;
+        }
+        if (vignette > 0) {
+          const dx = x - cx, dy = y - cy;
+          const dist = Math.sqrt(dx*dx + dy*dy) / maxDist;
+          const vig = 1 - (vignette / 100) * Math.pow(dist, 1.6);
+          r *= vig; g *= vig; b *= vig;
+        }
+
+        d[idx]   = clamp(r);
+        d[idx+1] = clamp(g);
+        d[idx+2] = clamp(b);
+      }
+    }
+    ctx.putImageData(img, 0, 0);
+
+    // Halation
+    if (halation > 0) {
+      const off = document.createElement("canvas"); off.width = W; off.height = H;
+      const octx = off.getContext("2d");
+      octx.drawImage(canvas, 0, 0);
+      const hd = octx.getImageData(0, 0, W, H);
+      for (let i = 0; i < hd.data.length; i += 4) {
+        const lum = 0.299*hd.data[i] + 0.587*hd.data[i+1] + 0.114*hd.data[i+2];
+        const mask = Math.max(0, lum - 180) / 75;
+        hd.data[i]   = hd.data[i]   * mask;
+        hd.data[i+1] = hd.data[i+1] * mask * 0.5;
+        hd.data[i+2] = hd.data[i+2] * mask * 0.3;
+        hd.data[i+3] = 255 * mask * (halation / 100);
+      }
+      octx.putImageData(hd, 0, 0);
+      const blur = Math.round(halation / 8);
+      ctx.filter = `blur(${blur}px)`;
+      ctx.globalCompositeOperation = "screen";
+      ctx.drawImage(off, 0, 0);
+      ctx.filter = "none";
+      ctx.globalCompositeOperation = "source-over";
+    }
+
+    dimLabel.textContent = `${W} × ${H}`;
+    if (mode === 'image') overlay.classList.remove("visible");
+  });
+}
+
+// ── File loading ──
+function activateCanvas() {
+  dropZone.style.display = "none";
+  canvasWrap.classList.add("visible");
+  exportBtn.disabled = false;
+}
+
+function stopCamera() {
+  if (cameraStream) {
+    cameraStream.getTracks().forEach(t => t.stop());
+    cameraStream = null;
+  }
+  srcVideoEl.srcObject = null;
+  cameraIndicator.style.display = 'none';
+  cameraBtn.textContent = '⊙ Live Camera';
+}
+
+function loadFile(file) {
+  if (!file) return;
+  stopCamera();
+  stopVideoLoop();
+  if (file.type.startsWith('video/')) {
+    mode = 'video';
+    const url = URL.createObjectURL(file);
+    srcVideoEl.src = url;
+    srcVideoEl.onloadedmetadata = () => {
+      activateCanvas();
+      srcVideoEl.play();
+      startVideoLoop();
+    };
+  } else if (file.type.startsWith('image/')) {
+    mode = 'image';
+    const url = URL.createObjectURL(file);
+    srcImg.onload = () => {
+      activateCanvas();
+      process();
+    };
+    srcImg.src = url;
+  }
+}
+
+async function startCamera() {
+  if (cameraStream) {
+    // Toggle off
+    stopCamera();
+    stopVideoLoop();
+    mode = 'image';
+    return;
+  }
+  stopVideoLoop();
+  try {
+    cameraStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+    mode = 'camera';
+    srcVideoEl.srcObject = cameraStream;
+    srcVideoEl.onloadedmetadata = () => {
+      activateCanvas();
+      srcVideoEl.play();
+      startVideoLoop();
+    };
+    srcVideoEl.load();
+    cameraIndicator.style.display = 'inline';
+    cameraBtn.textContent = '⊙ Stop Camera';
+  } catch (e) {
+    alert('Camera access denied: ' + (e.message || e));
+  }
+}
+
+// Drop zone
+dropZone.addEventListener("click", () => fileInput.click());
+dropZone.addEventListener("dragover", e => { e.preventDefault(); dropZone.classList.add("drag-over"); });
+dropZone.addEventListener("dragleave", () => dropZone.classList.remove("drag-over"));
+dropZone.addEventListener("drop", e => {
+  e.preventDefault();
+  dropZone.classList.remove("drag-over");
+  loadFile(e.dataTransfer.files[0]);
+});
+
+fileInput.addEventListener("change", e => loadFile(e.target.files[0]));
+swapBtn.addEventListener("click", () => fileInput.click());
+cameraBtn.addEventListener("click", startCamera);
+
+resetBtn.addEventListener("click", () => {
+  CONTROLS.forEach(c => {
+    settings[c.key] = c.def;
+    const range = document.getElementById(`range-${c.key}`);
+    range.value = c.def;
+    range.dispatchEvent(new Event("input"));
+  });
+});
+
+exportBtn.addEventListener("click", () => {
+  const a = document.createElement("a");
+  a.download = "deglazer-output.png";
+  a.href = canvas.toDataURL("image/png");
+  a.click();
+});
+</script>
+</body>
+</html>

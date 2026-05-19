@@ -1,0 +1,1411 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CRT Lab — Authentic Phosphor Emulator</title>
+<style>
+:root{
+  --bg:#0a0a0a;
+  --panel:#111214;
+  --panel-2:#17191c;
+  --border:#24272d;
+  --text:#e6e6e6;
+  --text-dim:#9aa0a6;
+  --accent:#00ff9c;
+  --accent-2:#ff5a5f;
+  --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+}
+*{box-sizing:border-box}
+html,body{height:100%}
+body{
+  margin:0;
+  background:var(--bg);
+  color:var(--text);
+  font-family:Inter,system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;
+  overflow:hidden;
+}
+.app{
+  display:grid;
+  grid-template-rows:auto 1fr;
+  height:100vh;
+}
+header{
+  display:flex;
+  align-items:center;
+  gap:16px;
+  padding:12px 16px;
+  background:linear-gradient(180deg,#0f1114,#0a0a0a);
+  border-bottom:1px solid var(--border);
+  flex-wrap:wrap;
+}
+.brand{
+  display:flex;align-items:center;gap:10px;font-weight:700;letter-spacing:.5px
+}
+.brand-dot{width:10px;height:10px;border-radius:50%;background:var(--accent);box-shadow:0 0 12px #00ff9c80}
+.brand span{opacity:.9}
+.upload{
+  display:flex;align-items:center;gap:10px;flex:1;min-width:280px
+}
+.drop{
+  flex:1;
+  position:relative;
+  border:1px dashed #2b3038;
+  background:var(--panel);
+  border-radius:10px;
+  padding:10px 12px;
+  display:flex;align-items:center;gap:10px;
+  transition:.2s;
+  cursor:pointer;
+}
+.drop:hover{border-color:#3a414d;background:#121417}
+.drop.drag{border-color:var(--accent);box-shadow:0 0 0 2px #00ff9c22 inset}
+.drop input{display:none}
+.drop .hint{color:var(--text-dim);font-size:12px;font-family:var(--mono)}
+.presets{display:flex;gap:8px;flex-wrap:wrap}
+.pill{
+  font-family:var(--mono);font-size:12px;
+  padding:8px 10px;border-radius:8px;
+  background:var(--panel-2);border:1px solid var(--border);
+  color:#cbd5e1;cursor:pointer;transition:.15s;white-space:nowrap
+}
+.pill:hover{border-color:#3b4250;transform:translateY(-1px)}
+.pill.active{border-color:var(--accent);color:var(--accent);box-shadow:0 0 0 1px #00ff9c33 inset}
+
+main.workspace{
+  display:grid;
+  grid-template-columns:1.25fr 380px;
+  gap:16px;
+  padding:16px;
+  height:calc(100vh - 72px);
+  min-height:0;
+}
+@media(max-width:1100px){
+  main.workspace{grid-template-columns:1fr;grid-template-rows:auto 1fr}
+}
+
+.preview-panel{
+  background:var(--panel);
+  border:1px solid var(--border);
+  border-radius:14px;
+  display:flex;flex-direction:column;min-height:0;
+  overflow:hidden;
+  box-shadow:0 10px 30px #00000066;
+}
+.preview-top{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:10px 12px;border-bottom:1px solid var(--border);
+  background:#0d0f12;
+}
+.preview-top .left{display:flex;align-items:center;gap:10px}
+.led{width:8px;height:8px;border-radius:50%;background:#ff5a5f;box-shadow:0 0 8px #ff5a5f88;animation:pulse 2s infinite}
+@keyframes pulse{0%,100%{opacity:.6}50%{opacity:1}}
+.title-mono{font-family:var(--mono);font-size:12px;color:#aeb4bd;letter-spacing:.3px}
+.actions{display:flex;gap:8px}
+.btn{
+  font-family:var(--mono);font-size:12px;
+  padding:7px 10px;border-radius:8px;
+  background:#1a1e23;border:1px solid #2a3038;color:#d1d5db;cursor:pointer
+}
+.btn:hover{background:#20252c}
+.btn.primary{background:#0e251c;border-color:#113f2e;color:#a7f3d0}
+.btn.primary:hover{background:#103324}
+.btn.recording{background:#3a0a0a;border-color:#5a1a1a;color:#ff8888;animation:recPulse 1s infinite}
+.btn.inactive{opacity:.35;cursor:not-allowed;pointer-events:none}
+@keyframes recPulse{0%,100%{opacity:1}50%{opacity:.6}}
+
+.crt-stage{
+  flex:1;position:relative;display:grid;place-items:center;
+  background:radial-gradient(1200px 600px at 50% 40%, #12151a 0%, #0a0b0d 70%);
+  min-height:0;padding:18px;
+}
+.crt-bezel{
+  position:relative;
+  width:min(100%,1100px);
+  aspect-ratio:4/3;
+  max-height:100%;
+  background:#08090a;
+  border-radius:22px;
+  padding:28px;
+  box-shadow:
+    inset 0 0 0 2px #1a1d22,
+    inset 0 0 0 10px #0e1013,
+    inset 0 8px 30px #000,
+    inset 0 -8px 20px #000,
+    0 20px 60px #000000aa;
+}
+.bezel-inner{
+  position:relative;width:100%;height:100%;
+  background:#000;border-radius:12px;
+  overflow:hidden;
+  box-shadow:inset 0 0 40px #000, inset 0 0 2px #ffffff10;
+}
+#glCanvas{width:100%;height:100%;display:block;background:#000}
+.crt-glare{
+  pointer-events:none;
+  position:absolute;inset:0;
+  background:
+    linear-gradient(115deg, transparent 40%, rgba(255,255,255,.06) 48%, transparent 52%),
+    radial-gradient(800px 300px at 20% 0%, rgba(255,255,255,.05), transparent 60%);
+  mix-blend-mode:screen;
+}
+.stats{
+  display:flex;gap:16px;flex-wrap:wrap;
+  padding:10px 12px;border-top:1px solid var(--border);
+  background:#0d0f12;font-family:var(--mono);font-size:11px;color:#9aa0a6
+}
+.stats b{color:#d1d5db;font-weight:600}
+
+.controls-panel{
+  background:var(--panel);
+  border:1px solid var(--border);
+  border-radius:14px;
+  display:flex;flex-direction:column;min-height:0;overflow:hidden
+}
+.controls-head{
+  padding:12px;border-bottom:1px solid var(--border);
+  display:flex;align-items:center;justify-content:space-between
+}
+.controls-head h2{margin:0;font-size:13px;text-transform:uppercase;letter-spacing:.12em;color:#b6bcc6;font-family:var(--mono)}
+.toggle-edu{font-family:var(--mono);font-size:11px;color:#9aa0a6;background:transparent;border:1px solid var(--border);padding:6px 8px;border-radius:6px;cursor:pointer}
+.toggle-edu:hover{color:#e5e7eb;border-color:#3a414d}
+
+.controls{
+  overflow:auto;padding:12px;
+  scrollbar-width:thin;scrollbar-color:#2a2f36 transparent
+}
+.group{
+  border:1px solid var(--border);
+  background:var(--panel-2);
+  border-radius:10px;margin-bottom:12px;overflow:hidden
+}
+.group summary{
+  list-style:none;cursor:pointer;
+  padding:10px 12px;font-family:var(--mono);font-size:12px;color:#cbd5e1;
+  display:flex;align-items:center;justify-content:space-between;background:#14171c
+}
+.group summary::-webkit-details-marker{display:none}
+.group[open] summary{background:#151a1f;border-bottom:1px solid var(--border)}
+.caret{transition:.2s;opacity:.7}
+.group[open] .caret{transform:rotate(90deg)}
+.group-body{padding:12px;display:grid;gap:12px}
+.row{display:grid;grid-template-columns:1fr auto;gap:10px;align-items:center}
+.row label{font-family:var(--mono);font-size:11px;color:#aeb4bd;display:flex;align-items:center;gap:6px}
+.row .val{font-family:var(--mono);font-size:11px;color:#7dd3fc;min-width:48px;text-align:right}
+input[type=range]{
+  grid-column:1 / -1;
+  -webkit-appearance:none;appearance:none;height:24px;background:transparent;cursor:pointer
+}
+input[type=range]::-webkit-slider-runnable-track{height:4px;background:#22272f;border-radius:2px}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:14px;height:14px;border-radius:50%;background:#00ff9c;border:2px solid #0b1f17;margin-top:-5px;box-shadow:0 0 8px #00ff9c66}
+input[type=range]::-moz-range-track{height:4px;background:#22272f;border-radius:2px}
+input[type=range]::-moz-range-thumb{width:14px;height:14px;border-radius:50%;background:#00ff9c;border:2px solid #0b1f17}
+
+select, .seg{
+  grid-column:1 / -1;
+  background:#0f1216;border:1px solid #262b33;color:#d1d5db;
+  font-family:var(--mono);font-size:12px;padding:8px;border-radius:8px
+}
+.seg{display:flex;gap:6px;padding:4px}
+.seg button{flex:1;background:transparent;border:0;color:#9aa0a6;padding:6px;border-radius:6px;font-family:var(--mono);font-size:11px;cursor:pointer}
+.seg button.active{background:#1c2129;color:#e5e7eb;box-shadow:inset 0 0 0 1px #2b323c}
+
+.tip{
+  display:inline-grid;place-items:center;
+  width:16px;height:16px;border-radius:50%;
+  background:#1f242c;color:#9aa0a6;font-size:10px;border:1px solid #2b323c;cursor:help;
+  position:relative;
+}
+.tip:hover::after{
+  content:attr(data-tip);
+  position:absolute;bottom:130%;left:50%;transform:translateX(-50%);
+  width:240px;background:#0b0e12;color:#d1d5db;border:1px solid #2a3038;
+  padding:8px 10px;border-radius:8px;font-family:system-ui;font-size:12px;line-height:1.35;
+  box-shadow:0 10px 30px #000000aa;z-index:50;white-space:normal
+}
+
+.edu{
+  position:fixed;right:16px;bottom:16px;z-index:40;
+  width:360px;max-width:calc(100vw - 32px);
+  background:#0c0f13;border:1px solid var(--border);border-radius:12px;
+  box-shadow:0 20px 60px #000000aa;transform:translateY(20px);opacity:0;pointer-events:none;transition:.25s
+}
+.edu.open{transform:translateY(0);opacity:1;pointer-events:auto}
+.edu-head{display:flex;align-items:center;justify-content:space-between;padding:10px 12px;border-bottom:1px solid var(--border);font-family:var(--mono);font-size:12px;color:#cbd5e1}
+.edu-body{padding:12px;font-size:13px;line-height:1.55;color:#b7bdc6;max-height:50vh;overflow:auto}
+.edu-body h4{margin:10px 0 6px;color:#e5e7eb;font-size:13px}
+.edu-body ul{margin:6px 0 10px 18px}
+.edu-close{background:transparent;border:0;color:#9aa0a6;cursor:pointer;font-size:18px;line-height:1}
+
+.btn.camera-active{background:#0a1f15;border-color:#00ff9c;color:#00ff9c;box-shadow:0 0 0 1px #00ff9c33 inset;animation:camPulse 2s infinite}
+@keyframes camPulse{0%,100%{box-shadow:0 0 0 1px #00ff9c33 inset}50%{box-shadow:0 0 0 1px #00ff9c66 inset, 0 0 10px #00ff9c22}}
+
+video#videoSrc{display:none}
+
+/* Modal for export progress */
+.modal-overlay{
+  position:fixed;inset:0;z-index:100;
+  background:rgba(0,0,0,.7);
+  display:none;align-items:center;justify-content:center;
+}
+.modal-overlay.open{display:flex}
+.modal{
+  background:#0c0f13;border:1px solid var(--border);border-radius:14px;
+  width:420px;max-width:90vw;padding:20px;
+  box-shadow:0 20px 60px #000000cc;
+}
+.modal h3{margin:0 0 12px;font-family:var(--mono);font-size:14px;color:#e5e7eb}
+.modal p{margin:0 0 16px;font-size:13px;color:#9aa0a6;line-height:1.5}
+.progress-bar{
+  height:6px;background:#1a1e23;border-radius:3px;overflow:hidden;margin-bottom:8px;
+}
+.progress-fill{
+  height:100%;width:0%;background:var(--accent);border-radius:3px;
+  transition:width .1s linear;
+}
+.progress-text{font-family:var(--mono);font-size:11px;color:#7dd3fc;text-align:right}
+.modal .btn-row{display:flex;gap:8px;justify-content:flex-end;margin-top:16px}
+</style>
+</head>
+<body>
+<div class="app">
+  <header>
+    <div class="brand"><div class="brand-dot"></div><span>CRT LAB</span></div>
+    <div class="upload">
+      <label class="drop" id="drop">
+        <input type="file" id="file" accept="image/png,image/jpeg,image/webp,video/mp4,video/webm,video/quicktime">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#7dd3fc" stroke-width="1.5"><path d="M12 16V8m0 0l-3 3m3-3l3 3"/><rect x="3" y="14" width="18" height="6" rx="2"/></svg>
+        <div class="hint">Drop image/video or click to upload • JPG PNG WEBP MP4 WEBM MOV</div>
+      </label>
+      <button class="btn" id="cameraBtn" title="Stream live camera through CRT pipeline">⊙ Camera</button>
+    </div>
+    <div class="presets" id="presets">
+      <button class="pill" data-p="trinitron">1985 Trinitron TV</button>
+      <button class="pill active" data-p="vga">1992 VGA Monitor</button>
+      <button class="pill" data-p="arcade">1978 Arcade</button>
+      <button class="pill" data-p="green">Green Phosphor Terminal</button>
+      <button class="pill" data-p="vhs">VHS Camcorder</button>
+    </div>
+  </header>
+
+  <main class="workspace">
+    <section class="preview-panel">
+      <div class="preview-top">
+        <div class="left"><div class="led"></div><div class="title-mono">LIVE PREVIEW — WebGL2</div></div>
+        <div class="actions">
+          <button class="btn" id="playBtn" style="display:none">⏸ Pause</button>
+          <button class="btn inactive" id="exportVideoBtn">Export Video</button>
+          <button class="btn primary" id="exportBtn">Export PNG</button>
+        </div>
+      </div>
+      <div class="crt-stage">
+        <div class="crt-bezel">
+          <div class="bezel-inner">
+            <canvas id="glCanvas" width="1280" height="960"></canvas>
+            <div class="crt-glare"></div>
+          </div>
+        </div>
+      </div>
+      <div class="stats" id="stats">
+        <div>INPUT: <b id="s-in">—</b></div>
+        <div>CRT: <b id="s-crt">800×600</b></div>
+        <div>DOT PITCH: <b id="s-pitch">0.28mm</b> <span id="s-pitch-label">(dot pitch)</span></div>
+        <div>REFRESH: <b id="s-fps">60 Hz</b></div>
+        <div>PHOSPHOR: <b id="s-phos">P22</b></div>
+      </div>
+    </section>
+
+    <aside class="controls-panel">
+      <div class="controls-head">
+        <h2>CRT Parameters</h2>
+        <button class="toggle-edu" id="eduToggle">Why CRTs looked like this?</button>
+      </div>
+      <div class="controls">
+
+        <details class="group" open>
+          <summary>Resolution & Scaling <span class="caret">›</span></summary>
+          <div class="group-body">
+            <div class="row"><label>CRT Resolution <span class="tip" data-tip="CRTs had fixed phosphor triads (~0.28mm pitch). Images were scanned at broadcast standards, not pixel grids. We downscale with nearest-neighbor then magnify.">?</span></label></div>
+            <select id="c-res">
+              <option value="native">Native (no downscale)</option>
+              <option value="256x224">256×224 — NTSC Arcade</option>
+              <option value="320x240">320×240 — QVGA / VHS</option>
+              <option value="640x480">640×480 — VGA / NTSC</option>
+              <option value="800x600" selected>800×600 — SVGA</option>
+            </select>
+          </div>
+        </details>
+
+        <details class="group" open>
+          <summary>Beam & Scan <span class="caret">›</span></summary>
+          <div class="group-body">
+            <div class="row"><label>Scanlines <span class="tip" data-tip="Electron beam is Gaussian, ~15.7kHz horizontal. Only one line is lit at a time, creating dark gaps.">?</span></label><div class="val" id="v-scan">32%</div></div>
+            <input type="range" id="c-scan" min="0" max="100" value="32">
+            <div class="row"><label>Halation / Bloom <span class="tip" data-tip="Electrons scatter in phosphor and glass, creating a soft glow: sharp core + mid + wide outer.">?</span></label><div class="val" id="v-bloom">26%</div></div>
+            <input type="range" id="c-bloom" min="0" max="100" value="26">
+            <div class="row"><label>Bloom Radius</label><div class="val" id="v-brad">30%</div></div>
+            <input type="range" id="c-brad" min="0" max="100" value="30">
+            <div class="row"><label>Phosphor Persistence <span class="tip" data-tip="P22 phosphor decays in ~1-2ms. Longer persistence leaves motion trails, especially green P31.">?</span></label><div class="val" id="v-persist">5%</div></div>
+            <input type="range" id="c-persist" min="0" max="100" value="5">
+          </div>
+        </details>
+
+        <details class="group">
+          <summary>Geometry <span class="caret">›</span></summary>
+          <div class="group-body">
+            <div class="row"><label>Curvature <span class="tip" data-tip="Early tubes had ~30 inch radius faceplates. Later Trinitrons were cylindrical, then flat.">?</span></label><div class="val" id="v-curve">6%</div></div>
+            <input type="range" id="c-curve" min="0" max="100" value="6">
+            <div class="row"><label>Vignette / Glass</label><div class="val" id="v-vig">35%</div></div>
+            <input type="range" id="c-vig" min="0" max="100" value="35">
+          </div>
+        </details>
+
+        <details class="group" open>
+          <summary>Color <span class="caret">›</span></summary>
+          <div class="group-body">
+            <div class="row"><label>Color Temp (6500K–9300K)</label><div class="val" id="v-temp">8516K</div></div>
+            <input type="range" id="c-temp" min="0" max="100" value="72">
+            <div class="row"><label>Phosphor Tint</label></div>
+            <div class="seg" id="c-tint">
+              <button data-v="0" class="active">Neutral (P22)</button>
+              <button data-v="1">Amber</button>
+              <button data-v="2">Green P1</button>
+            </div>
+            <div class="row"><label>Chromatic Aberration <span class="tip" data-tip="Convergence errors offset R/G/B beams slightly, especially at edges.">?</span></label><div class="val" id="v-ca">18%</div></div>
+            <input type="range" id="c-ca" min="0" max="100" value="18">
+            <div class="row"><label>Phosphor Mask</label></div>
+            <select id="c-mask">
+              <option value="1">Aperture Grille (Trinitron)</option>
+              <option value="2" selected>Shadow Mask (dots)</option>
+              <option value="3">Slot Mask</option>
+              <option value="0">Off</option>
+            </select>
+            <div class="row"><label>Mask Strength</label><div class="val" id="v-maskint">35%</div></div>
+            <input type="range" id="c-maskint" min="0" max="100" value="35">
+          </div>
+        </details>
+
+        <details class="group" open>
+          <summary>Signal <span class="caret">›</span></summary>
+          <div class="group-body">
+            <div class="row"><label>Dot Crawl <span class="tip" data-tip="NTSC 3.58MHz subcarrier interferes with luma, causing crawling checkerboards on color edges.">?</span></label><div class="val" id="v-crawl">12%</div></div>
+            <input type="range" id="c-crawl" min="0" max="100" value="12">
+            <div class="row"><label>Color Bleed <span class="tip" data-tip="Chroma bandwidth was limited (~0.5MHz), smearing color horizontally.">?</span></label><div class="val" id="v-bleed">10%</div></div>
+            <input type="range" id="c-bleed" min="0" max="100" value="10">
+            <div class="row"><label>Interlace Flicker <span class="tip" data-tip="480i draws odd/even fields at 60Hz. Our eyes saw flicker on thin lines.">?</span></label><div class="val" id="v-inter">8%</div></div>
+            <input type="range" id="c-inter" min="0" max="100" value="8">
+            <div class="row"><label>Signal Noise</label><div class="val" id="v-noise">6%</div></div>
+            <input type="range" id="c-noise" min="0" max="100" value="6">
+            <div class="row"><label>Simulated FPS</label></div>
+            <div class="seg" id="c-fps">
+              <button data-v="60" class="active">60</button>
+              <button data-v="30">30</button>
+              <button data-v="24">24</button>
+              <button data-v="15">15</button>
+            </div>
+          </div>
+        </details>
+
+        <details class="group" open>
+          <summary>Audio <span class="caret">›</span></summary>
+          <div class="group-body">
+            <div class="row"><label>Audio Mode <span class="tip" data-tip="Pass-through plays original audio. Authentic adds CRT flyback whine (15.7kHz carrier + sidebands from beam modulation), tape wow/flutter, and hum bars.">?</span></label></div>
+            <div class="seg" id="c-audio">
+              <button data-v="off">Mute</button>
+              <button data-v="pass" class="active">Pass-through</button>
+              <button data-v="authentic">Authentic CRT</button>
+            </div>
+            <div class="row"><label>Flyback Whine <span class="tip" data-tip="The horizontal flyback transformer vibrates at ~15.7kHz. Its amplitude modulates with picture brightness (beam current), creating audible sidebands.">?</span></label><div class="val" id="v-whine">25%</div></div>
+            <input type="range" id="c-whine" min="0" max="100" value="25">
+            <div class="row"><label>Hum / Buzz (60Hz) <span class="tip" data-tip="Power supply ripple at 60Hz (or 120Hz 2nd harmonic) creates hum bars and audible buzz. Beat frequency with refresh rate causes slow drift.">?</span></label><div class="val" id="v-hum">15%</div></div>
+            <input type="range" id="c-hum" min="0" max="100" value="15">
+            <div class="row"><label>Tape Wow & Flutter <span class="tip" data-tip="Analog tape speed variations: wow (slow, <6Hz) from motor/belt wobble, flutter (fast, 6-200Hz) from capstan imperfections. Creates pitch modulation.">?</span></label><div class="val" id="v-wow">8%</div></div>
+            <input type="range" id="c-wow" min="0" max="100" value="8">
+            <div class="row"><label>Audio Noise Floor</label><div class="val" id="v-an">12%</div></div>
+            <input type="range" id="c-an" min="0" max="100" value="12">
+          </div>
+        </details>
+
+      </div>
+    </aside>
+  </main>
+</div>
+
+<div class="edu" id="edu">
+  <div class="edu-head">
+    <span>Why CRTs Looked Like This</span>
+    <button class="edu-close" id="eduClose">×</button>
+  </div>
+  <div class="edu-body">
+    <h4>Electron beam scanning</h4>
+    <p>A single beam sweeps left-to-right, top-to-bottom at ~15.7kHz (NTSC). Only the spot under the beam glows at any instant — we see scanlines because of the Gaussian beam profile and gap between lines.</p>
+    <h4>Phosphor triads & mask</h4>
+    <p>Color CRTs use red/green/blue phosphor dots or stripes behind a metal mask. Sony Trinitron used vertical aperture grille wires; shadow-mask tubes used dotted triads (~0.28mm pitch).</p>
+    <h4>Limited bandwidth</h4>
+    <p>Composite video shared luma and chroma on one wire. The 3.58MHz NTSC color subcarrier caused <b>dot crawl</b> (checkerboards) and chroma was low-resolution, causing <b>color bleed</b>.</p>
+    <h4>Interlaced scanning</h4>
+    <p>480i transmitted 240 lines at 60 fields per second (odd then even). This saved bandwidth but created flicker and twitter on fine details.</p>
+    <h4>Persistence & bloom</h4>
+    <p>Phosphors like P22 decay in ~1-2ms (medium persistence). Electrons scatter in glass, creating halation — a soft glow around bright areas. P31 green phosphor used in oscilloscopes persisted much longer.</p>
+    <h4>CRT Audio — The Sound of Scanning</h4>
+    <p>CRTs produced audible sound! The horizontal flyback transformer vibrated at ~15.7kHz due to magnetostriction. Its amplitude <b>modulated with picture brightness</b> — bright scenes made it louder. Power supply ripple at 60/120Hz created a low hum. VHS tapes added <b>wow & flutter</b> — slow pitch wobble from motor drift and fast flutter from capstan imperfections.</p>
+  </div>
+</div>
+
+<!-- Export Progress Modal -->
+<div class="modal-overlay" id="exportModal">
+  <div class="modal">
+    <h3 id="modalTitle">Exporting Video…</h3>
+    <p id="modalText">Capturing frames and processing…</p>
+    <div class="progress-bar"><div class="progress-fill" id="progressFill"></div></div>
+    <div class="progress-text" id="progressText">0%</div>
+    <div class="btn-row">
+      <button class="btn" id="cancelExport">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<video id="videoSrc" muted loop playsinline crossorigin="anonymous"></video>
+<script type="module">
+const $ = s => document.querySelector(s);
+const canvas = $('#glCanvas');
+const gl = canvas.getContext('webgl2', { alpha:false, antialias:false, preserveDrawingBuffer:true, powerPreference:'high-performance' });
+if(!gl){ alert('WebGL2 required'); }
+
+const vs = `#version 300 es
+in vec2 a_pos; in vec2 a_uv; out vec2 vUv;
+void main(){ vUv=a_uv; gl_Position=vec4(a_pos,0.0,1.0); }`;
+
+const fsCRT = `#version 300 es
+precision highp float;
+in vec2 vUv; out vec4 outColor;
+uniform sampler2D u_src; uniform sampler2D u_bloom; uniform sampler2D u_prev;
+uniform vec2 u_crtRes; uniform vec2 u_out;
+uniform float u_time; uniform float u_curve; uniform float u_scan; uniform float u_maskI;
+uniform int u_maskT; uniform float u_bloomA; uniform float u_aberr; uniform float u_vig;
+uniform float u_noise; uniform float u_crawl; uniform float u_bleed; uniform float u_inter;
+uniform float u_persist; uniform float u_temp; uniform int u_tint; uniform float u_fps;
+float rand(vec2 c){return fract(sin(dot(c,vec2(12.9898,78.233)))*43758.5453);}
+vec3 temp(float t){
+  vec3 col=vec3(1.0);
+  col.r=mix(1.02,0.91,t);
+  col.g=mix(1.0,0.96,t);
+  col.b=mix(0.95,1.08,t);
+  return col;
+}
+void main(){
+  vec2 uv=vUv;
+  vec2 cd=uv-0.5; float r2=dot(cd,cd);
+  uv += cd * r2 * u_curve * 0.6;
+  if(uv.x<0.0||uv.x>1.0||uv.y<0.0||uv.y>1.0){ outColor=vec4(0.0); return; }
+  float ab = u_aberr*0.0035;
+  vec3 col;
+  col.r = texture(u_src, uv+vec2(ab,0.0)).r;
+  col.g = texture(u_src, uv).g;
+  col.b = texture(u_src, uv-vec2(ab,0.0)).b;
+  if(u_bleed>0.001){
+    float b=u_bleed*0.004;
+    vec3 l=texture(u_src, uv-vec2(b,0.0)).rgb;
+    vec3 rr=texture(u_src, uv+vec2(b,0.0)).rgb;
+    col = mix(col, (l+rr+col)/3.0, u_bleed*0.65);
+  }
+  if(u_crawl>0.001){
+    float crawl = sin((uv.x*u_crtRes.x*1.8 + uv.y*u_crtRes.y*0.9)*3.14159 + u_time*60.0*0.5);
+    float edge = length(vec2(dFdx(col.r), dFdy(col.r)))*2.0;
+    col += crawl * 0.025 * u_crawl * clamp(edge*3.0,0.0,1.0);
+  }
+  float fy = uv.y * u_crtRes.y;
+  float f = fract(fy);
+  float beam = exp(-pow((f-0.5)*2.0,2.0)*14.0);
+  float scan = mix(1.0, beam*1.15, clamp(u_scan*1.1,0.0,1.0));
+  if(u_inter>0.001){
+    float field = mod(floor(u_time*u_fps),2.0);
+    float line = mod(floor(fy),2.0);
+    float flick = (line==field)?1.0:(1.0 - u_inter*0.28);
+    scan *= flick;
+  }
+  col *= scan;
+  vec3 mask=vec3(1.0);
+  if(u_maskT==1){
+    float x=gl_FragCoord.x; float p=mod(x,3.0);
+    if(p<1.0) mask=vec3(1.18,0.86,0.86);
+    else if(p<2.0) mask=vec3(0.86,1.18,0.86);
+    else mask=vec3(0.86,0.86,1.18);
+  } else if(u_maskT==2){
+    float x=gl_FragCoord.x; float y=gl_FragCoord.y;
+    float p=mod(x+mod(y,2.0)*1.5,3.0);
+    if(p<1.0) mask=vec3(1.22,0.82,0.82);
+    else if(p<2.0) mask=vec3(0.82,1.22,0.82);
+    else mask=vec3(0.82,0.82,1.22);
+  } else if(u_maskT==3){
+    float x=gl_FragCoord.x; float y=gl_FragCoord.y;
+    float mx=mod(x,3.0); float my=mod(y,2.0);
+    vec3 m=vec3(0.94);
+    if(mx<1.0) m.r=1.18; else if(mx<2.0) m.g=1.18; else m.b=1.18;
+    if(my>1.0) m*=0.88;
+    mask=m;
+  }
+  col *= mix(vec3(1.0), mask, u_maskI);
+  vec3 bloom = texture(u_bloom, vUv).rgb;
+  col += bloom * u_bloomA * 1.3;
+  col *= temp(u_temp);
+  if(u_tint==1){ float l=dot(col,vec3(0.299,0.587,0.114)); col=vec3(l*1.0,l*0.62,l*0.05); }
+  else if(u_tint==2){ float l=dot(col,vec3(0.299,0.587,0.114)); col=vec3(l*0.12,l*0.95,l*0.18); }
+  vec3 prev = texture(u_prev, vUv).rgb;
+  col = mix(col, prev, u_persist*0.92);
+  float vig = 1.0 - u_vig*0.75*smoothstep(0.25,1.0,length(cd*1.55));
+  col *= vig;
+  float n = (rand(vUv*u_out + u_time*0.5)-0.5) * u_noise * 0.07;
+  col += n;
+  col += pow(vig,4.0)*0.03;
+  outColor = vec4(pow(clamp(col,0.0,1.0), vec3(1.0/2.2)), 1.0);
+}`;
+
+const fsBlur = `#version 300 es
+precision highp float; in vec2 vUv; out vec4 outColor;
+uniform sampler2D u_tex; uniform vec2 u_dir; uniform vec2 u_res;
+void main(){
+  vec2 off = u_dir / u_res;
+  vec3 c = texture(u_tex, vUv).rgb * 0.227027;
+  c += texture(u_tex, vUv+off*1.0).rgb*0.1945946;
+  c += texture(u_tex, vUv-off*1.0).rgb*0.1945946;
+  c += texture(u_tex, vUv+off*2.0).rgb*0.1216216;
+  c += texture(u_tex, vUv-off*2.0).rgb*0.1216216;
+  c += texture(u_tex, vUv+off*3.0).rgb*0.054054;
+  c += texture(u_tex, vUv-off*3.0).rgb*0.054054;
+  c += texture(u_tex, vUv+off*4.0).rgb*0.016216;
+  c += texture(u_tex, vUv-off*4.0).rgb*0.016216;
+  outColor = vec4(c,1.0);
+}`;
+
+function compile(type, src){
+  const s=gl.createShader(type); gl.shaderSource(s,src); gl.compileShader(s);
+  if(!gl.getShaderParameter(s,gl.COMPILE_STATUS)) throw gl.getShaderInfoLog(s);
+  return s;
+}
+function program(vsSrc, fsSrc){
+  const p=gl.createProgram(); gl.attachShader(p,compile(gl.VERTEX_SHADER,vsSrc)); gl.attachShader(p,compile(gl.FRAGMENT_SHADER,fsSrc)); gl.linkProgram(p);
+  if(!gl.getProgramParameter(p,gl.LINK_STATUS)) throw gl.getProgramInfoLog(p);
+  return p;
+}
+const progCRT = program(vs, fsCRT);
+const progBlur = program(vs, fsBlur);
+
+const quad = gl.createBuffer();
+gl.bindBuffer(gl.ARRAY_BUFFER, quad);
+gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([
+  -1,-1,0,0,  1,-1,1,0,  -1,1,0,1,
+  -1,1,0,1,  1,-1,1,0,  1,1,1,1
+]), gl.STATIC_DRAW);
+
+function setupVAO(prog){
+  const vao=gl.createVertexArray(); gl.bindVertexArray(vao);
+  const pos=gl.getAttribLocation(prog,'a_pos'); const uv=gl.getAttribLocation(prog,'a_uv');
+  gl.bindBuffer(gl.ARRAY_BUFFER, quad);
+  gl.enableVertexAttribArray(pos); gl.vertexAttribPointer(pos,2,gl.FLOAT,false,16,0);
+  gl.enableVertexAttribArray(uv); gl.vertexAttribPointer(uv,2,gl.FLOAT,false,16,8);
+  return vao;
+}
+const vaoCRT = setupVAO(progCRT);
+const vaoBlur = setupVAO(progBlur);
+
+const uCRT = {
+  src: gl.getUniformLocation(progCRT, 'u_src'),
+  bloom: gl.getUniformLocation(progCRT, 'u_bloom'),
+  prev: gl.getUniformLocation(progCRT, 'u_prev'),
+  crtRes: gl.getUniformLocation(progCRT, 'u_crtRes'),
+  out: gl.getUniformLocation(progCRT, 'u_out'),
+  time: gl.getUniformLocation(progCRT, 'u_time'),
+  curve: gl.getUniformLocation(progCRT, 'u_curve'),
+  scan: gl.getUniformLocation(progCRT, 'u_scan'),
+  maskI: gl.getUniformLocation(progCRT, 'u_maskI'),
+  maskT: gl.getUniformLocation(progCRT, 'u_maskT'),
+  bloomA: gl.getUniformLocation(progCRT, 'u_bloomA'),
+  aberr: gl.getUniformLocation(progCRT, 'u_aberr'),
+  vig: gl.getUniformLocation(progCRT, 'u_vig'),
+  noise: gl.getUniformLocation(progCRT, 'u_noise'),
+  crawl: gl.getUniformLocation(progCRT, 'u_crawl'),
+  bleed: gl.getUniformLocation(progCRT, 'u_bleed'),
+  inter: gl.getUniformLocation(progCRT, 'u_inter'),
+  persist: gl.getUniformLocation(progCRT, 'u_persist'),
+  temp: gl.getUniformLocation(progCRT, 'u_temp'),
+  tint: gl.getUniformLocation(progCRT, 'u_tint'),
+  fps: gl.getUniformLocation(progCRT, 'u_fps')
+};
+const uBlur = {
+  tex: gl.getUniformLocation(progBlur, 'u_tex'),
+  dir: gl.getUniformLocation(progBlur, 'u_dir'),
+  res: gl.getUniformLocation(progBlur, 'u_res')
+};
+
+function tex(){
+  const t=gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D,t);
+  gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,gl.LINEAR);
+  gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MAG_FILTER,gl.LINEAR);
+  gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_S,gl.CLAMP_TO_EDGE);
+  gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_T,gl.CLAMP_TO_EDGE);
+  return t;
+}
+const tSrc = tex(), tBloomA = tex(), tBloomB = tex(), tPrev = tex();
+function makeFBO(t,w,h){
+  const f=gl.createFramebuffer(); gl.bindFramebuffer(gl.FRAMEBUFFER,f);
+  gl.bindTexture(gl.TEXTURE_2D,t); gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA,w,h,0,gl.RGBA,gl.UNSIGNED_BYTE,null);
+  gl.framebufferTexture2D(gl.FRAMEBUFFER,gl.COLOR_ATTACHMENT0,gl.TEXTURE_2D,t,0);
+  return f;
+}
+let W=1280,H=960;
+const fboA = makeFBO(tBloomA,W,H);
+const fboB = makeFBO(tBloomB,W,H);
+const fboPrev = makeFBO(tPrev,W,H);
+gl.bindFramebuffer(gl.FRAMEBUFFER,null);
+
+const state = {
+  srcImg:null, srcVideo:$('#videoSrc'), isVideo:false,
+  crtRes:[800,600], fps:60,
+  scan:0.32, bloom:0.26, brad:0.30, persist:0.05,
+  curve:0.06, vig:0.35,
+  temp:0.72, tint:0, ca:0.18, maskT:2, maskI:0.35,
+  crawl:0.12, bleed:0.10, inter:0.08, noise:0.06,
+  audioMode: 'pass',
+  whine: 0.25, hum: 0.15, wow: 0.08, audioNoise: 0.12,
+};
+let lastFrame=0;
+let rafId = null;
+
+// ===== AUDIO ENGINE =====
+let audioCtx = null;
+let audioNodes = {};
+// FIX: createMediaElementSource can only be called ONCE per media element.
+// We persist this node and reconnect it instead of recreating it.
+let mediaSourceNode = null;
+
+function initAudio() {
+  if (!audioCtx) {
+    const AC = window.AudioContext || window.webkitAudioContext;
+    if (!AC) return;
+    audioCtx = new AC();
+  }
+}
+
+function disconnectAudio() {
+  // Stop oscillators / buffer sources first to avoid InvalidStateError on disconnect
+  ['whineOsc','humOsc','humOsc2','noiseNode','sidebandOsc','wowLfo','flutterLfo'].forEach(k => {
+    if (audioNodes[k]) {
+      try { audioNodes[k].stop(); } catch(e){}
+    }
+  });
+  // Disconnect every node we tracked
+  Object.values(audioNodes).forEach(node => {
+    if (node) {
+      try { node.disconnect(); } catch(e){}
+    }
+  });
+  audioNodes = {};
+  // FIX: Do NOT clear mediaSourceNode — it must stay alive for reuse.
+}
+
+let noiseBuffer = null;
+function getNoiseBuffer() {
+  if (noiseBuffer) return noiseBuffer;
+  if (!audioCtx) return null;
+  const bufferSize = audioCtx.sampleRate * 2;
+  noiseBuffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
+  const data = noiseBuffer.getChannelData(0);
+  for (let i = 0; i < bufferSize; i++) { data[i] = Math.random() * 2 - 1; }
+  return noiseBuffer;
+}
+
+function setupAudio() {
+  if (!audioCtx) return;
+  disconnectAudio();
+  if (state.audioMode === 'off') return;
+  const v = state.srcVideo;
+  if (!v || !state.isVideo) return;
+
+  v.muted = false;
+
+  // FIX: Reuse the single MediaElementAudioSourceNode for this element
+  if (!mediaSourceNode) {
+    mediaSourceNode = audioCtx.createMediaElementSource(v);
+  }
+  audioNodes.source = mediaSourceNode;
+
+  audioNodes.masterGain = audioCtx.createGain();
+  audioNodes.masterGain.gain.value = 1.0;
+  audioNodes.masterGain.connect(audioCtx.destination);
+
+  if (state.audioMode === 'pass') {
+    audioNodes.gain = audioCtx.createGain();
+    audioNodes.gain.gain.value = 1.0;
+    mediaSourceNode.connect(audioNodes.gain);
+    audioNodes.gain.connect(audioNodes.masterGain);
+    return;
+  }
+
+  // AUTHENTIC MODE
+  const delayNode = audioCtx.createDelay(1.0);
+  delayNode.delayTime.value = 0.015;
+  audioNodes.delayNode = delayNode;
+
+  audioNodes.wowLfo = audioCtx.createOscillator();
+  audioNodes.wowLfo.type = 'sine';
+  audioNodes.wowLfo.frequency.value = 0.8 + Math.random() * 1.5;
+  audioNodes.wowGain = audioCtx.createGain();
+  audioNodes.wowGain.gain.value = state.wow * 0.003;
+  audioNodes.wowLfo.connect(audioNodes.wowGain);
+  audioNodes.wowGain.connect(delayNode.delayTime);
+  audioNodes.wowLfo.start();
+
+  audioNodes.flutterLfo = audioCtx.createOscillator();
+  audioNodes.flutterLfo.type = 'sine';
+  audioNodes.flutterLfo.frequency.value = 18 + Math.random() * 25;
+  audioNodes.flutterGain = audioCtx.createGain();
+  audioNodes.flutterGain.gain.value = state.wow * 0.0008;
+  audioNodes.flutterLfo.connect(audioNodes.flutterGain);
+  audioNodes.flutterGain.connect(delayNode.delayTime);
+  audioNodes.flutterLfo.start();
+
+  mediaSourceNode.connect(delayNode);
+  const signalGain = audioCtx.createGain();
+  signalGain.gain.value = 0.95;
+  audioNodes.signalGain = signalGain;
+  delayNode.connect(signalGain);
+
+  audioNodes.humOsc = audioCtx.createOscillator();
+  audioNodes.humOsc.type = 'sine';
+  audioNodes.humOsc.frequency.value = 60;
+  audioNodes.humGain = audioCtx.createGain();
+  audioNodes.humGain.gain.value = state.hum * 0.04;
+  audioNodes.humOsc.connect(audioNodes.humGain);
+  audioNodes.humGain.connect(signalGain);
+  audioNodes.humOsc.start();
+
+  audioNodes.humOsc2 = audioCtx.createOscillator();
+  audioNodes.humOsc2.type = 'sine';
+  audioNodes.humOsc2.frequency.value = 120;
+  audioNodes.hum2Gain = audioCtx.createGain();
+  audioNodes.hum2Gain.gain.value = state.hum * 0.015;
+  audioNodes.humOsc2.connect(audioNodes.hum2Gain);
+  audioNodes.hum2Gain.connect(signalGain);
+  audioNodes.humOsc2.start();
+
+  const nb = getNoiseBuffer();
+  if (nb) {
+    audioNodes.noiseNode = audioCtx.createBufferSource();
+    audioNodes.noiseNode.buffer = nb;
+    audioNodes.noiseNode.loop = true;
+    audioNodes.noiseGain = audioCtx.createGain();
+    audioNodes.noiseGain.gain.value = state.audioNoise * 0.03;
+    const noiseFilter = audioCtx.createBiquadFilter();
+    noiseFilter.type = 'lowpass';
+    noiseFilter.frequency.value = 8000;
+    audioNodes.noiseFilter = noiseFilter;
+    audioNodes.noiseNode.connect(noiseFilter);
+    noiseFilter.connect(audioNodes.noiseGain);
+    audioNodes.noiseGain.connect(signalGain);
+    audioNodes.noiseNode.start();
+  }
+
+  audioNodes.whineOsc = audioCtx.createOscillator();
+  audioNodes.whineOsc.type = 'sine';
+  audioNodes.whineOsc.frequency.value = 15734;
+  audioNodes.whineGain = audioCtx.createGain();
+  audioNodes.whineGain.gain.value = state.whine * 0.008;
+  audioNodes.whineOsc.connect(audioNodes.whineGain);
+  audioNodes.whineGain.connect(signalGain);
+  audioNodes.whineOsc.start();
+
+  // FIX: Track sideband oscillator so disconnectAudio can stop & disconnect it
+  audioNodes.sidebandOsc = audioCtx.createOscillator();
+  audioNodes.sidebandOsc.type = 'sine';
+  audioNodes.sidebandOsc.frequency.value = 15734 - 60;
+  audioNodes.sidebandGain = audioCtx.createGain();
+  audioNodes.sidebandGain.gain.value = state.whine * 0.003;
+  audioNodes.sidebandOsc.connect(audioNodes.sidebandGain);
+  audioNodes.sidebandGain.connect(signalGain);
+  audioNodes.sidebandOsc.start();
+
+  signalGain.connect(audioNodes.masterGain);
+}
+
+function updateFlybackWhine() {
+  // FIX: Guard against scheduling on a suspended context (throws or is ignored)
+  if (!audioCtx || state.audioMode !== 'authentic' || !audioNodes.whineGain) return;
+  if (audioCtx.state !== 'running') return;
+  const baseAmp = state.whine * 0.008;
+  const variation = 1.0 + (Math.sin(performance.now() * 0.001) * 0.3 + Math.sin(performance.now() * 0.0037) * 0.2);
+  audioNodes.whineGain.gain.setTargetAtTime(baseAmp * variation, audioCtx.currentTime, 0.05);
+}
+
+// FIX: Global first-click only resumes AudioContext. We do NOT call setupAudio()
+// here because if the first click is the Play or Audio-Mode button, that handler
+// would call setupAudio() a second time, causing a audible stutter / graph rebuild.
+document.addEventListener('click', function onFirstClick() {
+  if (!audioCtx) initAudio();
+  if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
+}, { once: true });
+
+// ===== RENDERING =====
+function resize(){
+  const rect = canvas.parentElement.getBoundingClientRect();
+  const dpr = Math.min(window.devicePixelRatio||1,2);
+  W = Math.max(640, Math.floor(rect.width*dpr));
+  H = Math.max(480, Math.floor(rect.height*dpr));
+  if(canvas.width!==W || canvas.height!==H){
+    canvas.width=W; canvas.height=H;
+    gl.bindTexture(gl.TEXTURE_2D,tBloomA); gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA,W,H,0,gl.RGBA,gl.UNSIGNED_BYTE,null);
+    gl.bindTexture(gl.TEXTURE_2D,tBloomB); gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA,W,H,0,gl.RGBA,gl.UNSIGNED_BYTE,null);
+    gl.bindTexture(gl.TEXTURE_2D,tPrev); gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA,W,H,0,gl.RGBA,gl.UNSIGNED_BYTE,null);
+    gl.bindFramebuffer(gl.FRAMEBUFFER,fboA);
+    gl.framebufferTexture2D(gl.FRAMEBUFFER,gl.COLOR_ATTACHMENT0,gl.TEXTURE_2D,tBloomA,0);
+    gl.bindFramebuffer(gl.FRAMEBUFFER,fboB);
+    gl.framebufferTexture2D(gl.FRAMEBUFFER,gl.COLOR_ATTACHMENT0,gl.TEXTURE_2D,tBloomB,0);
+    gl.bindFramebuffer(gl.FRAMEBUFFER,fboPrev);
+    gl.framebufferTexture2D(gl.FRAMEBUFFER,gl.COLOR_ATTACHMENT0,gl.TEXTURE_2D,tPrev,0);
+    gl.bindFramebuffer(gl.FRAMEBUFFER,null);
+    gl.viewport(0,0,W,H);
+  }
+}
+new ResizeObserver(resize).observe(canvas.parentElement); resize();
+
+const off = document.createElement('canvas'); const octx = off.getContext('2d',{willReadFrequently:true});
+function uploadSource(){
+  if(!state.srcImg && !state.isVideo) return;
+  const resSel = $('#c-res').value;
+  let tw, th;
+  if(resSel==='native'){
+    tw = state.isVideo? state.srcVideo.videoWidth : state.srcImg.naturalWidth;
+    th = state.isVideo? state.srcVideo.videoHeight: state.srcImg.naturalHeight;
+  }else{
+    [tw,th]=resSel.split('x').map(Number);
+  }
+  if(!tw || !th || tw < 2 || th < 2) return;
+  state.crtRes=[tw,th];
+  off.width=tw; off.height=th;
+  octx.imageSmoothingEnabled=false;
+  if(state.isVideo) octx.drawImage(state.srcVideo,0,0,tw,th);
+  else octx.drawImage(state.srcImg,0,0,tw,th);
+  gl.bindTexture(gl.TEXTURE_2D,tSrc);
+  gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL,true);
+  gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA,gl.RGBA,gl.UNSIGNED_BYTE,off);
+  gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,gl.NEAREST);
+  gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MAG_FILTER,gl.NEAREST);
+  $('#s-in').textContent = state.isVideo? `${state.srcVideo.videoWidth}×${state.srcVideo.videoHeight}` : `${state.srcImg.naturalWidth}×${state.srcImg.naturalHeight}`;
+  $('#s-crt').textContent = `${tw}×${th}`;
+}
+
+let exportInProgress = false;
+
+function render(t){
+  if (exportInProgress) {
+    rafId = requestAnimationFrame(render);
+    return;
+  }
+  const now=t*0.001;
+  const minDelta = 1/state.fps - 0.001;
+  if(now - lastFrame < minDelta && state.isVideo){ rafId = requestAnimationFrame(render); return; }
+  lastFrame=now;
+  if(state.isVideo && state.srcVideo.readyState>=2){ uploadSource(); }
+  if(!state.srcImg && !state.isVideo){ rafId = requestAnimationFrame(render); return; }
+
+  gl.bindFramebuffer(gl.FRAMEBUFFER,fboA); gl.viewport(0,0,W,H);
+  gl.useProgram(progBlur); gl.bindVertexArray(vaoBlur);
+  gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D,tSrc);
+  gl.uniform1i(uBlur.tex,0);
+  gl.uniform2f(uBlur.res,W,H);
+  gl.uniform2f(uBlur.dir, state.brad*8+1,0);
+  gl.drawArrays(gl.TRIANGLES,0,6);
+  gl.bindFramebuffer(gl.FRAMEBUFFER,fboB);
+  gl.bindTexture(gl.TEXTURE_2D,tBloomA);
+  gl.uniform2f(uBlur.dir,0, state.brad*8+1);
+  gl.drawArrays(gl.TRIANGLES,0,6);
+
+  gl.bindFramebuffer(gl.FRAMEBUFFER,null); gl.viewport(0,0,W,H);
+  gl.useProgram(progCRT); gl.bindVertexArray(vaoCRT);
+  gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D,tSrc); gl.uniform1i(uCRT.src,0);
+  gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D,tBloomB); gl.uniform1i(uCRT.bloom,1);
+  gl.activeTexture(gl.TEXTURE2); gl.bindTexture(gl.TEXTURE_2D,tPrev); gl.uniform1i(uCRT.prev,2);
+  gl.uniform2f(uCRT.crtRes, state.crtRes[0], state.crtRes[1]);
+  gl.uniform2f(uCRT.out, W,H);
+  gl.uniform1f(uCRT.time, now);
+  gl.uniform1f(uCRT.curve, state.curve);
+  gl.uniform1f(uCRT.scan, state.scan);
+  gl.uniform1f(uCRT.maskI, state.maskI);
+  gl.uniform1i(uCRT.maskT, state.maskT);
+  gl.uniform1f(uCRT.bloomA, state.bloom);
+  gl.uniform1f(uCRT.aberr, state.ca);
+  gl.uniform1f(uCRT.vig, state.vig);
+  gl.uniform1f(uCRT.noise, state.noise);
+  gl.uniform1f(uCRT.crawl, state.crawl);
+  gl.uniform1f(uCRT.bleed, state.bleed);
+  gl.uniform1f(uCRT.inter, state.inter);
+  gl.uniform1f(uCRT.persist, state.isVideo? state.persist : 0);
+  gl.uniform1f(uCRT.temp, state.temp);
+  gl.uniform1i(uCRT.tint, state.tint);
+  gl.uniform1f(uCRT.fps, state.fps);
+  gl.drawArrays(gl.TRIANGLES,0,6);
+
+  gl.bindTexture(gl.TEXTURE_2D,tPrev);
+  gl.copyTexSubImage2D(gl.TEXTURE_2D,0,0,0,0,0,W,H);
+
+  updateFlybackWhine();
+  rafId = requestAnimationFrame(render);
+}
+rafId = requestAnimationFrame(render);
+
+// UI wiring
+const bindRange=(id,key,fmt=v=>Math.round(v*100)+'%')=>{
+  const el=$(id), val=$('#v-'+id.split('-')[1]);
+  const upd=()=>{ state[key]=el.value/100; if(val) val.textContent=fmt(state[key]); };
+  el.addEventListener('input',upd); upd();
+};
+bindRange('#c-scan','scan'); bindRange('#c-bloom','bloom'); bindRange('#c-brad','brad'); bindRange('#c-persist','persist');
+bindRange('#c-curve','curve'); bindRange('#c-vig','vig'); bindRange('#c-temp','temp',v=>Math.round(6500+v*2800)+'K'); bindRange('#c-ca','ca'); bindRange('#c-maskint','maskI'); bindRange('#c-crawl','crawl'); bindRange('#c-bleed','bleed'); bindRange('#c-inter','inter'); bindRange('#c-noise','noise');
+
+// Audio range bindings
+bindRange('#c-whine','whine'); bindRange('#c-hum','hum'); bindRange('#c-wow','wow'); bindRange('#c-an','audioNoise');
+
+$('#c-res').addEventListener('change',uploadSource);
+$('#c-mask').addEventListener('change',e=>{ state.maskT=parseInt(e.target.value); updatePitchStat(); });
+
+function updatePitchStat() {
+  const el = $('#s-pitch'), lbl = $('#s-pitch-label');
+  if (!el) return;
+  switch (state.maskT) {
+    case 0: el.textContent = '—';      lbl.textContent = '(off)';           break;
+    case 1: el.textContent = '0.25mm'; lbl.textContent = '(stripe pitch)';  break;
+    case 2: el.textContent = '0.28mm'; lbl.textContent = '(dot pitch)';     break;
+    case 3: el.textContent = '0.31mm'; lbl.textContent = '(slot pitch)';    break;
+  }
+}
+$('#c-tint').addEventListener('click',e=>{ if(e.target.dataset.v!==undefined){ [...$('#c-tint').children].forEach(b=>b.classList.toggle('active',b===e.target)); state.tint=parseInt(e.target.dataset.v); $('#s-phos').textContent = state.tint===2?'P1 Green':state.tint===1?'Amber':'P22'; }});
+$('#c-fps').addEventListener('click',e=>{ if(e.target.dataset.v){ [...$('#c-fps').children].forEach(b=>b.classList.toggle('active',b===e.target)); state.fps=parseInt(e.target.dataset.v); $('#s-fps').textContent = state.fps+' Hz'; }});
+
+// Audio mode switching
+$('#c-audio').addEventListener('click', e => {
+  if (e.target.dataset.v === undefined) return;
+  [...$('#c-audio').children].forEach(b => b.classList.toggle('active', b === e.target));
+  state.audioMode = e.target.dataset.v;
+  if (state.isVideo) {
+    if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
+    state.srcVideo.muted = false;
+    setupAudio();
+  }
+});
+
+// file handling
+const drop=$('#drop'), file=$('#file');
+let crtCameraStream = null;
+
+function stopCrtCamera() {
+  if (crtCameraStream) {
+    crtCameraStream.getTracks().forEach(t => t.stop());
+    crtCameraStream = null;
+  }
+  state.srcVideo.srcObject = null;
+  $('#cameraBtn').classList.remove('camera-active');
+  $('#cameraBtn').textContent = '⊙ Camera';
+}
+
+drop.addEventListener('dragover',e=>{e.preventDefault();drop.classList.add('drag')});
+drop.addEventListener('dragleave',()=>drop.classList.remove('drag'));
+drop.addEventListener('drop',e=>{e.preventDefault();drop.classList.remove('drag'); stopCrtCamera(); handleFiles(e.dataTransfer.files)});
+file.addEventListener('change',e=>{ stopCrtCamera(); handleFiles(e.target.files)});
+function updateExportBtn() {
+  $('#exportVideoBtn').classList.toggle('inactive', !state.isVideo);
+}
+
+let currentBlobUrl=null;
+function handleFiles(files){
+  const f=files[0]; if(!f) return;
+  if(currentBlobUrl){ URL.revokeObjectURL(currentBlobUrl); currentBlobUrl=null; }
+  // FIX: Tear down audio graph when unloading a video so we don't leave
+  // dangling nodes or try to create a second MediaElementAudioSourceNode later.
+  if(state.isVideo && state.srcVideo){
+    state.srcVideo.pause();
+    state.srcVideo.removeAttribute('src');
+    disconnectAudio();
+  }
+  const url=URL.createObjectURL(f); currentBlobUrl=url;
+  if(f.type.startsWith('video')){
+    state.isVideo=true; state.srcImg=null;
+    const v=state.srcVideo; v.src=url; v.muted=true; v.loop=true; v.play(); $('#playBtn').style.display='inline-block'; $('#playBtn').textContent='⏸ Pause';
+    v.onloadedmetadata = () => { uploadSource(); };
+    updateExportBtn();
+  }else{
+    state.isVideo=false; $('#playBtn').style.display='none';
+    disconnectAudio();
+    const img=new Image(); img.onload=()=>{ state.srcImg=img; uploadSource(); }; img.onerror=()=>{ state.srcImg=null; }; img.src=url;
+    updateExportBtn();
+  }
+}
+
+// FIX: Play button now also initializes/resumes audio and sets up the graph,
+// since we removed setupAudio() from the global first-click handler.
+$('#playBtn').addEventListener('click',()=>{
+  const v=state.srcVideo;
+  if (!audioCtx) initAudio();
+  if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
+  if(v.paused){
+    v.play();
+    $('#playBtn').textContent='⏸ Pause';
+    if (state.audioMode !== 'off') {
+      v.muted = false;
+      setupAudio();
+    }
+  } else {
+    v.pause();
+    $('#playBtn').textContent='▶ Play';
+  }
+});
+state.srcVideo.addEventListener('ended',()=>{ $('#playBtn').textContent='▶ Play'; });
+state.srcVideo.addEventListener('error',()=>{ state.isVideo=false; $('#playBtn').style.display='none'; updateExportBtn(); });
+
+// ── Camera ──
+$('#cameraBtn').addEventListener('click', async () => {
+  if (crtCameraStream) {
+    // Toggle off
+    stopCrtCamera();
+    state.isVideo = false;
+    state.srcImg = null;
+    $('#playBtn').style.display = 'none';
+    updateExportBtn();
+    $('#s-in').textContent = '—';
+    return;
+  }
+  // Stop any current file-based video
+  if (state.isVideo && state.srcVideo) {
+    state.srcVideo.pause();
+    disconnectAudio();
+  }
+  try {
+    crtCameraStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+    const v = state.srcVideo;
+    v.srcObject = crtCameraStream;
+    v.muted = true;
+    v.loop = false;
+    state.isVideo = true;
+    state.srcImg = null;
+    v.onloadedmetadata = () => {
+      v.play();
+      uploadSource();
+      $('#s-in').textContent = `${v.videoWidth}×${v.videoHeight} (CAMERA)`;
+    };
+    v.load();
+    $('#playBtn').style.display = 'none'; // camera is always live, no pause needed
+    updateExportBtn();
+    $('#cameraBtn').classList.add('camera-active');
+    $('#cameraBtn').textContent = '⊙ Stop Camera';
+  } catch(e) {
+    alert('Camera access denied: ' + (e.message || e));
+    crtCameraStream = null;
+  }
+});
+
+$('#exportBtn').addEventListener('click',()=>{
+  canvas.toBlob(b=>{
+    const a=document.createElement('a'); a.href=URL.createObjectURL(b); a.download='crt-export.png'; a.click(); URL.revokeObjectURL(a.href);
+  },'image/png');
+});
+
+// ===== VIDEO EXPORT (with texture isolation) =====
+let isExporting = false;
+let exportCancel = false;
+
+function createExportTexture(w,h) {
+  const t = gl.createTexture();
+  gl.bindTexture(gl.TEXTURE_2D, t);
+  gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, w, h, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+  return t;
+}
+
+function createExportFBO(t) {
+  const fbo = gl.createFramebuffer();
+  gl.bindFramebuffer(gl.FRAMEBUFFER, fbo);
+  gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, t, 0);
+  return fbo;
+}
+
+$('#exportVideoBtn').addEventListener('click', async () => {
+  if (!state.isVideo || !state.srcVideo) {
+    alert('Please load a video first.');
+    return;
+  }
+  if (isExporting) return;
+
+  const v = state.srcVideo;
+  const duration = v.duration;
+  if (!isFinite(duration) || duration <= 0) {
+    alert('Video has no finite duration. Cannot export.');
+    return;
+  }
+
+  if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
+
+  isExporting = true;
+  exportCancel = false;
+  exportInProgress = true;
+  if (rafId) { cancelAnimationFrame(rafId); rafId = null; }
+
+  const modal = $('#exportModal');
+  const progressFill = $('#progressFill');
+  const progressText = $('#progressText');
+  const modalTitle = $('#modalTitle');
+  const modalText = $('#modalText');
+
+  modal.classList.add('open');
+  $('#exportVideoBtn').classList.add('recording');
+
+  // Declare resources outside try so finally can clean them up
+  let mediaRecorder = null;
+  let recordingPromise = null;
+  let expSrcTex = null, expBloomTexA = null, expBloomTexB = null, expPrevTex = null, expCRTTex = null;
+  let expSrcFBO = null, expBloomFBO_A = null, expBloomFBO_B = null, expCRTFBO = null;
+
+  try {
+    const videoWidth = v.videoWidth;
+    const videoHeight = v.videoHeight;
+    const fps = state.fps;
+    const totalFrames = Math.ceil(duration * fps);
+
+    modalTitle.textContent = 'Exporting Video (no audio)';
+    modalText.textContent = `Resolution: ${videoWidth}×${videoHeight} @ ${fps}fps • ${totalFrames} frames`;
+
+    const capCanvas = document.createElement('canvas');
+    capCanvas.width = videoWidth;
+    capCanvas.height = videoHeight;
+    const capCtx = capCanvas.getContext('2d');
+
+    const mimeType = MediaRecorder.isTypeSupported('video/webm;codecs=vp9')
+      ? 'video/webm;codecs=vp9'
+      : MediaRecorder.isTypeSupported('video/webm')
+      ? 'video/webm'
+      : null;
+    if (!mimeType) throw new Error('WebM video export is not supported in this browser (try Chrome or Firefox).');
+
+    const stream = capCanvas.captureStream(fps);
+    mediaRecorder = new MediaRecorder(stream, {
+      mimeType,
+      videoBitsPerSecond: 8000000
+    });
+
+    const chunks = [];
+    mediaRecorder.ondataavailable = e => { if (e.data.size > 0) chunks.push(e.data); };
+
+    recordingPromise = new Promise(resolve => {
+      mediaRecorder.onstop = resolve;
+    });
+
+    mediaRecorder.start(100);
+
+    v.currentTime = 0;
+    v.pause();
+
+    await new Promise(r => {
+      const onSeek = () => { v.removeEventListener('seeked', onSeek); r(); };
+      v.addEventListener('seeked', onSeek);
+    });
+
+    const expW = videoWidth;
+    const expH = videoHeight;
+
+    expSrcTex = createExportTexture(expW, expH);
+    expBloomTexA = createExportTexture(expW, expH);
+    expBloomTexB = createExportTexture(expW, expH);
+    expPrevTex = createExportTexture(expW, expH);
+    expCRTTex = createExportTexture(expW, expH);
+
+    expSrcFBO = createExportFBO(expSrcTex);
+    expBloomFBO_A = createExportFBO(expBloomTexA);
+    expBloomFBO_B = createExportFBO(expBloomTexB);
+    expCRTFBO = gl.createFramebuffer();
+    gl.bindFramebuffer(gl.FRAMEBUFFER, expCRTFBO);
+    gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, expCRTTex, 0);
+
+    const exportOff = document.createElement('canvas');
+    exportOff.width = state.crtRes[0];
+    exportOff.height = state.crtRes[1];
+    const exportOffCtx = exportOff.getContext('2d', { willReadFrequently: true });
+    exportOffCtx.imageSmoothingEnabled = false;
+
+    let frameIdx = 0;
+    const frameInterval = 1 / fps;
+    // FIX: Never seek to the exact duration (some browsers don't fire seeked at the very end)
+    const maxTime = Math.max(0, duration - 0.001);
+
+    while (frameIdx < totalFrames && !exportCancel) {
+      const targetTime = Math.min(frameIdx * frameInterval, maxTime);
+      v.currentTime = targetTime;
+
+      await new Promise(r => {
+        const onSeek = () => { v.removeEventListener('seeked', onSeek); r(); };
+        v.addEventListener('seeked', onSeek);
+      });
+
+      // Upload downscaled source to expSrcTex
+      exportOffCtx.drawImage(v, 0, 0, state.crtRes[0], state.crtRes[1]);
+      gl.bindTexture(gl.TEXTURE_2D, expSrcTex);
+      gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, exportOff);
+
+      // --- Bloom pass (horizontal) ---
+      gl.bindFramebuffer(gl.FRAMEBUFFER, expBloomFBO_A);
+      gl.viewport(0, 0, expW, expH);
+      gl.useProgram(progBlur);
+      gl.bindVertexArray(vaoBlur);
+      gl.activeTexture(gl.TEXTURE0);
+      gl.bindTexture(gl.TEXTURE_2D, expSrcTex);
+      gl.uniform1i(uBlur.tex, 0);
+      gl.uniform2f(uBlur.res, expW, expH);
+      gl.uniform2f(uBlur.dir, state.brad * 8 + 1, 0);
+      gl.drawArrays(gl.TRIANGLES, 0, 6);
+
+      // --- Bloom pass (vertical) ---
+      gl.bindFramebuffer(gl.FRAMEBUFFER, expBloomFBO_B);
+      gl.bindTexture(gl.TEXTURE_2D, expBloomTexA);
+      gl.uniform2f(uBlur.dir, 0, state.brad * 8 + 1);
+      gl.drawArrays(gl.TRIANGLES, 0, 6);
+
+      // --- Main CRT pass to expCRTFBO ---
+      gl.bindFramebuffer(gl.FRAMEBUFFER, expCRTFBO);
+      gl.viewport(0, 0, expW, expH);
+      gl.useProgram(progCRT);
+      gl.bindVertexArray(vaoCRT);
+      gl.activeTexture(gl.TEXTURE0);
+      gl.bindTexture(gl.TEXTURE_2D, expSrcTex);
+      gl.uniform1i(uCRT.src, 0);
+      gl.activeTexture(gl.TEXTURE1);
+      gl.bindTexture(gl.TEXTURE_2D, expBloomTexB);
+      gl.uniform1i(uCRT.bloom, 1);
+      gl.activeTexture(gl.TEXTURE2);
+      gl.bindTexture(gl.TEXTURE_2D, expPrevTex);
+      gl.uniform1i(uCRT.prev, 2);
+      gl.uniform2f(uCRT.crtRes, state.crtRes[0], state.crtRes[1]);
+      gl.uniform2f(uCRT.out, expW, expH);
+      gl.uniform1f(uCRT.time, targetTime);
+      gl.uniform1f(uCRT.curve, state.curve);
+      gl.uniform1f(uCRT.scan, state.scan);
+      gl.uniform1f(uCRT.maskI, state.maskI);
+      gl.uniform1i(uCRT.maskT, state.maskT);
+      gl.uniform1f(uCRT.bloomA, state.bloom);
+      gl.uniform1f(uCRT.aberr, state.ca);
+      gl.uniform1f(uCRT.vig, state.vig);
+      gl.uniform1f(uCRT.noise, state.noise);
+      gl.uniform1f(uCRT.crawl, state.crawl);
+      gl.uniform1f(uCRT.bleed, state.bleed);
+      gl.uniform1f(uCRT.inter, state.inter);
+      gl.uniform1f(uCRT.persist, 0); // no persistence in export
+      gl.uniform1f(uCRT.temp, state.temp);
+      gl.uniform1i(uCRT.tint, state.tint);
+      gl.uniform1f(uCRT.fps, state.fps);
+      gl.drawArrays(gl.TRIANGLES, 0, 6);
+
+      // Read pixels into capCanvas
+      const pixels = new Uint8Array(expW * expH * 4);
+      gl.readPixels(0, 0, expW, expH, gl.RGBA, gl.UNSIGNED_BYTE, pixels);
+
+      const imgData = capCtx.createImageData(expW, expH);
+      for (let y = 0; y < expH; y++) {
+        for (let x = 0; x < expW; x++) {
+          const srcIdx = ((expH - 1 - y) * expW + x) * 4;
+          const dstIdx = (y * expW + x) * 4;
+          imgData.data[dstIdx] = pixels[srcIdx];
+          imgData.data[dstIdx + 1] = pixels[srcIdx + 1];
+          imgData.data[dstIdx + 2] = pixels[srcIdx + 2];
+          imgData.data[dstIdx + 3] = 255;
+        }
+      }
+      capCtx.putImageData(imgData, 0, 0);
+
+      // Update progress
+      frameIdx++;
+      const pct = Math.round((frameIdx / totalFrames) * 100);
+      progressFill.style.width = pct + '%';
+      progressText.textContent = pct + '%';
+
+      await new Promise(r => requestAnimationFrame(r));
+    }
+
+    mediaRecorder.stop();
+    await recordingPromise;
+
+    if (!exportCancel && chunks.length > 0) {
+      const videoBlob = new Blob(chunks, { type: 'video/webm' });
+      const url = URL.createObjectURL(videoBlob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'crt-export.webm';
+      a.click();
+      URL.revokeObjectURL(url);
+    }
+  } catch (err) {
+    console.error('Export failed:', err);
+    alert('Export failed: ' + (err.message || 'See console for details.'));
+  } finally {
+    // FIX: Ensure recorder is stopped and temporary GL objects are deleted
+    if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+      try { mediaRecorder.stop(); } catch(e){}
+    }
+    [expSrcTex, expBloomTexA, expBloomTexB, expPrevTex, expCRTTex].forEach(t => { if(t) gl.deleteTexture(t); });
+    [expSrcFBO, expBloomFBO_A, expBloomFBO_B, expCRTFBO].forEach(f => { if(f) gl.deleteFramebuffer(f); });
+
+    exportInProgress = false;
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+    gl.viewport(0, 0, W, H);
+    if (rafId) cancelAnimationFrame(rafId);
+    rafId = requestAnimationFrame(render);
+    modal.classList.remove('open');
+    $('#exportVideoBtn').classList.remove('recording');
+    isExporting = false;
+  }
+});
+
+$('#cancelExport').addEventListener('click', () => {
+  exportCancel = true;
+});
+
+// presets
+const presets={
+ trinitron:{res:'640x480',scan:72,bloom:58,brad:48,persist:12,curve:32,vig:58,temp:28,tint:0,ca:22,mask:1,maskI:52,crawl:58,bleed:48,inter:52,noise:18,fps:60,whine:35,hum:25,wow:12,audioNoise:18,audio:'authentic'},
+ vga:{res:'800x600',scan:32,bloom:26,brad:30,persist:5,curve:6,vig:35,temp:72,tint:0,ca:18,mask:2,maskI:35,crawl:12,bleed:10,inter:8,noise:6,fps:60,whine:15,hum:10,wow:4,audioNoise:8,audio:'pass'},
+ arcade:{res:'256x224',scan:92,bloom:52,brad:46,persist:18,curve:62,vig:52,temp:35,tint:0,ca:28,mask:3,maskI:70,crawl:5,bleed:8,inter:0,noise:14,fps:60,whine:45,hum:30,wow:18,audioNoise:22,audio:'authentic'},
+ green:{res:'640x480',scan:62,bloom:34,brad:38,persist:42,curve:18,vig:40,temp:10,tint:2,ca:12,mask:1,maskI:22,crawl:0,bleed:0,inter:12,noise:10,fps:60,whine:20,hum:35,wow:6,audioNoise:15,audio:'authentic'},
+ vhs:{res:'320x240',scan:52,bloom:44,brad:55,persist:14,curve:26,vig:54,temp:22,tint:0,ca:34,mask:2,maskI:38,crawl:82,bleed:78,inter:78,noise:48,fps:30,whine:30,hum:40,wow:25,audioNoise:35,audio:'authentic'},
+};
+$('#presets').addEventListener('click',e=>{
+  const b=e.target.closest('.pill'); if(!b) return;
+  [...$('#presets').children].forEach(x=>x.classList.toggle('active',x===b));
+  const p=presets[b.dataset.p]; if(!p) return;
+  $('#c-res').value=p.res;
+  [['#c-scan',p.scan],['#c-bloom',p.bloom],['#c-brad',p.brad],['#c-persist',p.persist],['#c-curve',p.curve],['#c-vig',p.vig],['#c-temp',p.temp],['#c-ca',p.ca],['#c-maskint',p.maskI],['#c-crawl',p.crawl],['#c-bleed',p.bleed],['#c-inter',p.inter],['#c-noise',p.noise],['#c-whine',p.whine],['#c-hum',p.hum],['#c-wow',p.wow],['#c-an',p.audioNoise]].forEach(([sel,v])=>{$(sel).value=v;$(sel).dispatchEvent(new Event('input'))});
+  $('#c-mask').value=p.mask; state.maskT=p.mask; updatePitchStat();
+  [...$('#c-tint').children].forEach(btn=>btn.classList.toggle('active', parseInt(btn.dataset.v)===p.tint)); state.tint=p.tint;
+  [...$('#c-fps').children].forEach(btn=>btn.classList.toggle('active', parseInt(btn.dataset.v)===p.fps)); state.fps=p.fps; $('#s-fps').textContent=p.fps+' Hz';
+  state.audioMode = p.audio || 'pass';
+  [...$('#c-audio').children].forEach(btn=>btn.classList.toggle('active', btn.dataset.v===state.audioMode));
+  uploadSource();
+  if (state.isVideo) {
+    state.srcVideo.muted = false;
+    setupAudio();
+  }
+});
+
+// educational
+const edu=$('#edu'); $('#eduToggle').onclick=()=>edu.classList.toggle('open'); $('#eduClose').onclick=()=>edu.classList.remove('open');
+
+// demo image
+function loadDemo(){
+  const img=new Image();
+  img.crossOrigin='anonymous';
+  img.src='https://images.unsplash.com/photo-1531297484001-80022131cc8a?auto=format&fit=crop&w=1280&q=80';
+  img.onload=()=>{ state.srcImg=img; state.isVideo=false; uploadSource(); };
+  img.onerror=()=>{ state.srcImg=null; };
+}
+loadDemo();
+</script>
+</body>
+</html>
