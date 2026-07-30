@@ -1,0 +1,833 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="description" content="DEGLAZER — AI art texture restoration. Add film grain, halation, chromatic aberration and faithful film-stock looks.">
+<title>DEGLAZER</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Special+Elite&family=VT323&display=swap');
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bronze:      #c8a96e;
+    --bronze-dim:  #8b7355;
+    --bronze-deep: #4a3018;
+    --ink:         #0e0e0e;
+    --ink-2:       #0b0b0b;
+    --line:        #2a2520;
+    --text:        #c8c4b8;
+    --text-dim:    #7a6f60;
+  }
+
+  body {
+    background: var(--ink);
+    color: var(--text);
+    font-family: 'Special Elite', 'Courier New', Courier, monospace;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    position: relative;
+  }
+
+  /* ── Film-grain texture overlay (keeps the analog feel) ── */
+  body::before {
+    content: "";
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    z-index: 9999;
+    opacity: 0.06;
+    mix-blend-mode: screen;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  }
+
+  header {
+    border-bottom: 1px solid var(--line);
+    padding: 16px 24px;
+    display: flex;
+    align-items: baseline;
+    gap: 16px;
+    position: relative;
+  }
+  header .logo { font-size: 18px; letter-spacing: 0.28em; color: var(--bronze-dim); text-transform: uppercase; }
+  header .sub  { font-size: 12px; color: #4a4540; letter-spacing: 0.14em; }
+
+  .layout { display: flex; flex: 1; min-height: 0; flex-wrap: wrap; }
+
+  /* ── Controls ── */
+  .controls {
+    width: 258px;
+    min-width: 258px;
+    border-right: 1px solid #1e1c18;
+    padding: 18px 15px;
+    background: var(--ink-2);
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    overflow-y: auto;
+    max-height: calc(100vh - 55px);
+  }
+  .section-label {
+    font-size: 12px;
+    letter-spacing: 0.22em;
+    color: #5a5248;
+    text-transform: uppercase;
+    margin: 14px 0 12px;
+    border-bottom: 1px dotted #24201b;
+    padding-bottom: 6px;
+  }
+  .section-label:first-child { margin-top: 0; }
+
+  /* ── Presets ── */
+  .preset-grid { display: flex; flex-wrap: wrap; gap: 5px; }
+  .preset-btn {
+    flex: 1 1 calc(50% - 3px);
+    background: none;
+    border: 1px solid #24201b;
+    color: var(--text-dim);
+    padding: 6px 4px;
+    font-size: 11px;
+    font-family: inherit;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    cursor: pointer;
+    transition: border-color 0.15s, color 0.15s, background 0.15s;
+  }
+  .preset-btn:hover { border-color: #4a4030; color: var(--bronze); }
+  .preset-btn.active { border-color: #8b6030; color: var(--bronze); background: #2a1c0e; }
+  .preset-tag {
+    display: block;
+    font-size: 8.5px;
+    letter-spacing: 0.05em;
+    color: #5a4e3c;
+    text-transform: none;
+    margin-top: 2px;
+  }
+  .preset-note {
+    font-size: 10px;
+    color: #4a4238;
+    line-height: 1.5;
+    margin-top: 9px;
+    letter-spacing: 0.02em;
+  }
+
+  .param { margin-bottom: 13px; }
+  .param-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; }
+  .param-name-wrap { display: flex; align-items: center; gap: 6px; }
+  .param-name { font-size: 12px; letter-spacing: 0.05em; color: #9a8a72; text-transform: uppercase; }
+  .param-value {
+    font-size: 13px;
+    color: var(--bronze);
+    font-variant-numeric: tabular-nums;
+    min-width: 34px;
+    text-align: right;
+  }
+
+  /* ── info dot ── */
+  .info-dot {
+    width: 14px; height: 14px;
+    border: 1px solid var(--bronze-dim);
+    border-radius: 50%;
+    color: var(--bronze-dim);
+    font-size: 10px;
+    line-height: 12px;
+    text-align: center;
+    cursor: pointer;
+    font-family: 'VT323', monospace;
+    font-style: italic;
+    user-select: none;
+    transition: color 0.15s, border-color 0.15s, background 0.15s;
+    flex: 0 0 auto;
+  }
+  .info-dot:hover, .info-dot:focus { color: var(--bronze); border-color: var(--bronze); background: #2a1c0e; outline: none; }
+
+  .slider-wrap { position: relative; height: 18px; display: flex; align-items: center; }
+  .slider-track { position: absolute; left: 0; right: 0; height: 2px; background: #1e1c18; pointer-events: none; }
+  .slider-mid { position: absolute; top: 4px; width: 1px; height: 10px; background: #332c22; pointer-events: none; }
+  .slider-fill { position: absolute; height: 2px; background: #8b6030; pointer-events: none; }
+  .slider-thumb { position: absolute; width: 10px; height: 10px; background: var(--bronze); border-radius: 50%; pointer-events: none; transform: translateX(-50%); }
+  input[type=range] {
+    position: absolute; width: 100%; opacity: 0; cursor: pointer; height: 18px; margin: 0;
+    -webkit-appearance: none; appearance: none;
+  }
+
+  .tooltip-box {
+    margin: 6px 0 10px;
+    min-height: 34px;
+    font-size: 11px;
+    color: #5a5048;
+    letter-spacing: 0.03em;
+    line-height: 1.5;
+    border-top: 1px solid #1a1814;
+    padding-top: 9px;
+  }
+
+  .btn-group { margin-top: 8px; padding-top: 14px; display: flex; flex-direction: column; gap: 8px; border-top: 1px dotted #24201b; }
+  button {
+    background: none; border: 1px solid var(--line); color: #6a6058;
+    padding: 8px 0; font-size: 12px; font-family: inherit; letter-spacing: 0.16em;
+    text-transform: uppercase; cursor: pointer; width: 100%;
+    transition: border-color 0.15s, color 0.15s;
+  }
+  button:hover { border-color: #4a4030; color: #9a8a72; }
+  button.primary { background: var(--bronze-deep); border-color: #8b6030; color: var(--bronze); padding: 10px 0; }
+  button.primary:hover { background: #5a3820; }
+  button:disabled { background: #1a1814; border-color: #222; color: #3a3530; cursor: not-allowed; }
+
+  /* ── Canvas area ── */
+  .canvas-area { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 24px; min-width: 0; }
+  .drop-zone {
+    width: 100%; max-width: 560px; aspect-ratio: 4/3;
+    border: 1px dashed var(--line);
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    cursor: pointer; gap: 12px; background: #0d0c0a; transition: border-color 0.2s;
+  }
+  .drop-zone:hover, .drop-zone.drag-over { border-color: #4a4030; }
+  .drop-zone .icon { font-size: 34px; color: var(--line); }
+  .drop-zone .label { font-size: 13px; letter-spacing: 0.12em; color: #5a5248; text-transform: uppercase; }
+  .drop-zone .hint  { font-size: 12px; color: #2e2c28; }
+
+  .canvas-wrap { position: relative; max-width: 100%; display: none; }
+  .canvas-wrap.visible { display: block; }
+  #output { max-width: 100%; max-height: calc(100vh - 150px); display: block; image-rendering: auto; }
+
+  .canvas-meta {
+    margin-top: 8px; display: flex; justify-content: space-between; align-items: center;
+    gap: 12px; font-size: 12px; color: #3a3530; letter-spacing: 0.06em; width: 100%;
+  }
+  .canvas-meta span { cursor: pointer; color: #5a5248; }
+  .canvas-meta span:hover { color: #9a8a72; }
+  #compareBtn.active { color: var(--bronze); }
+
+  /* ── Info modal ── */
+  .modal-backdrop {
+    position: fixed; inset: 0; background: rgba(5,5,5,0.72);
+    display: none; align-items: center; justify-content: center; z-index: 10000; padding: 24px;
+  }
+  .modal-backdrop.open { display: flex; }
+  .modal-card {
+    position: relative;
+    max-width: 380px; width: 100%;
+    background: #100e0b;
+    border: 1px solid #8b6030;
+    box-shadow: 0 0 0 4px #0b0b0b, 0 0 40px rgba(0,0,0,0.8);
+    padding: 22px 22px 20px;
+  }
+  .modal-card::before {
+    content: ""; position: absolute; inset: 0; pointer-events: none; opacity: 0.05; mix-blend-mode: screen;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='m'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23m)'/%3E%3C/svg%3E");
+  }
+  .modal-title { font-size: 17px; letter-spacing: 0.14em; color: var(--bronze); text-transform: uppercase; margin-bottom: 4px; }
+  .modal-sub { font-size: 11px; letter-spacing: 0.1em; color: #6a5c46; text-transform: uppercase; margin-bottom: 16px; border-bottom: 1px dotted #33291b; padding-bottom: 12px; }
+  .modal-block { margin-bottom: 13px; }
+  .modal-block h4 { font-size: 11px; letter-spacing: 0.14em; color: var(--bronze-dim); text-transform: uppercase; margin-bottom: 4px; }
+  .modal-block p { font-size: 13px; line-height: 1.6; color: #b0a898; }
+  .modal-close {
+    position: absolute; top: 10px; right: 12px; width: auto; border: none; background: none;
+    color: #6a5c46; font-size: 18px; cursor: pointer; padding: 4px; letter-spacing: 0;
+  }
+  .modal-close:hover { color: var(--bronze); }
+
+  @media (max-width: 640px) {
+    .controls { width: 100%; min-width: 100%; max-height: none; border-right: none; border-bottom: 1px solid #1e1c18; }
+    .layout { flex-direction: column; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <span class="logo">◈ Deglazer</span>
+  <span class="sub">AI Art Texture Restoration</span>
+</header>
+
+<div class="layout">
+  <div class="controls" id="controls"></div>
+
+  <div class="canvas-area">
+    <div class="drop-zone" id="dropZone">
+      <div class="icon">⊕</div>
+      <div class="label">Drop image / video or click to upload</div>
+      <div class="hint">PNG · JPG · WEBP · MP4 · WEBM</div>
+    </div>
+
+    <div class="canvas-wrap" id="canvasWrap">
+      <canvas id="output"></canvas>
+      <div class="canvas-meta">
+        <span id="swapBtn">↑ swap source</span>
+        <span id="compareBtn" title="Hold to see the original">⇄ hold: original</span>
+        <span id="cameraIndicator" style="display:none;color:#c8a96e;letter-spacing:0.08em">⊙ LIVE</span>
+        <span id="dimLabel"></span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Info modal -->
+<div class="modal-backdrop" id="infoModal">
+  <div class="modal-card">
+    <button class="modal-close" id="infoClose" aria-label="Close">✕</button>
+    <div class="modal-title" id="infoTitle"></div>
+    <div class="modal-sub" id="infoSub"></div>
+    <div class="modal-block"><h4>What it was</h4><p id="infoWas"></p></div>
+    <div class="modal-block"><h4>What it does</h4><p id="infoDoes"></p></div>
+  </div>
+</div>
+
+<input type="file" id="fileInput" accept="image/*,video/*" style="display:none">
+<img id="srcImg" style="display:none" crossorigin="anonymous" alt="">
+<video id="srcVideoEl" style="display:none" muted loop playsinline crossorigin="anonymous"></video>
+
+<script>
+// ── Mode / resource state ──
+let mode = 'image';               // 'image' | 'video' | 'camera'
+let cameraStream = null;
+let videoRafId = null;
+let currentObjectURL = null;
+let sourceName = 'deglazer';
+let grainSeed = 42;
+let videoFrameCount = 0;
+let showOriginal = false;
+let activePreset = null;
+
+// ── Controls (grouped) ──
+// group: 'color' | 'texture'
+const CONTROLS = [
+  // Color grade
+  { key: "temperature", group:"color", label: "Temperature", min: -100, max: 100, step: 1,   def: 0,
+    tip: "Warm ↔ cool white balance", was: "Film came balanced for daylight (~5500K) or tungsten (~3200K). Shoot under the wrong light and the whole frame took on a warm or cool cast.", does: "Shifts the image along the blue↔amber axis." },
+  { key: "tint",        group:"color", label: "Tint",        min: -100, max: 100, step: 1,   def: 0,
+    tip: "Green ↔ magenta white balance", was: "The other half of white balance. Fluorescent light and certain emulsions (Fuji especially) pushed green, while others leaned magenta.", does: "Shifts the image along the green↔magenta axis." },
+  { key: "saturation",  group:"color", label: "Saturation",  min: 0,   max: 200, step: 1,   def: 100,
+    tip: "Color intensity — 0 is true B&W", was: "Every stock had its own color intensity: slide and Fuji films were vivid, Portra was famously restrained. Black-and-white film had none at all.", does: "Scales color intensity. Drop to 0 for genuine black-and-white." },
+  { key: "contrast",    group:"color", label: "Contrast",    min: -100, max: 100, step: 1,   def: 0,
+    tip: "Tonal separation", was: "Slide film was punchy and contrasty; color-negative film was flat and forgiving so it could hold detail in a wide range of light.", does: "Expands or compresses the separation between shadows and highlights." },
+  { key: "fade",        group:"color", label: "Fade",        min: 0,   max: 60,  step: 1,   def: 0,
+    tip: "Lifted, milky blacks", was: "The washed, milky shadows of aged prints, cross-processing and bleach-bypass — blacks that never quite reach black.", does: "Raises the shadow floor for a faded, vintage look." },
+  // Texture
+  { key: "grain",       group:"texture", label: "Film Grain",    min: 0, max: 60,  step: 1,   def: 18,
+    tip: "The classic analog luminance noise", was: "The physical silver-halide crystals suspended in film emulsion. Faster films needed bigger crystals, so higher ISO meant heavier grain.", does: "Adds luminance noise across the image." },
+  { key: "grainSize",   group:"texture", label: "Grain Size",    min: 1, max: 5,   step: 0.5, def: 1,
+    tip: "Fine speckle ↔ chunky clumps", was: "Grain had a real physical size. 35mm looked coarse blown up, while medium- and large-format negatives were nearly grainless.", does: "Scales the grain from fine speckle to chunky clumps." },
+  { key: "colorNoise",  group:"texture", label: "Color Noise",   min: 0, max: 40,  step: 1,   def: 8,
+    tip: "Per-channel RGB speckle", was: "Chroma noise from film's separate red, green and blue dye layers — and from early digital sensors straining in low light.", does: "Adds independent noise to each color channel." },
+  { key: "roughness",   group:"texture", label: "Roughness",     min: 0, max: 50,  step: 1,   def: 12,
+    tip: "Micro-contrast texture", was: "The fine micro-texture of a real photographic surface — the opposite of the plasticky, over-smoothed look of AI renders.", does: "Adds luminance micro-contrast to disrupt smooth gradients." },
+  { key: "softness",    group:"texture", label: "Softness",      min: 0, max: 10,  step: 0.1, def: 0,
+    tip: "Optical diffusion / blur", was: "Lens diffusion and film's inherent lack of digital bite. Real optics never resolved the razor-perfect edges AI invents.", does: "Applies a gentle optical blur before the grain lands." },
+  { key: "chromatic",   group:"texture", label: "Chromatic Ab.", min: 0, max: 6,   step: 0.1, def: 1.2,
+    tip: "Lens color fringing", was: "Chromatic aberration: lenses — cheap or fast ones especially — couldn't focus every wavelength to the same point, so edges fringed color.", does: "Splits the red and blue channels sideways." },
+  { key: "halation",    group:"texture", label: "Halation",      min: 0, max: 100, step: 1,   def: 0,
+    tip: "Glowing highlight bloom", was: "Bright light punched through the emulsion, bounced off the film base and re-exposed from behind. CineStill's removed anti-halation layer made that glow famously red.", does: "Blooms a colored glow around the brightest highlights." },
+  { key: "vignette",    group:"texture", label: "Vignette",      min: 0, max: 80,  step: 1,   def: 30,
+    tip: "Edge light falloff", was: "Lenses and hoods let less light reach the corners of the frame than the center, darkening the edges.", does: "Darkens the frame toward the corners." },
+  { key: "dither",      group:"texture", label: "Dither",        min: 0, max: 20,  step: 1,   def: 0,
+    tip: "Breaks color banding", was: "A trick from limited-palette displays and early scanners: scattered noise faked extra colors and hid hard steps between them.", does: "Breaks up banding in skies and flat gradients." },
+];
+
+// ── Presets ── fully specified for faithfulness.
+// The toolkit now grades color AND texture, so each preset targets a stock's
+// documented color cast, contrast, saturation, grain and optical signature.
+const PRESETS = {
+  "Portra 400":     { tag:"warm · fine · muted",   temperature:12,  tint:3,   saturation:90,  contrast:-12, fade:12, grain:7,  grainSize:1.5, colorNoise:3,  roughness:5,  softness:1,   chromatic:0,   halation:0,  vignette:12, dither:3 },
+  "Gold 200":       { tag:"golden · nostalgic",     temperature:32,  tint:6,   saturation:112, contrast:6,   fade:8,  grain:14, grainSize:2,   colorNoise:6,  roughness:9,  softness:0.5, chromatic:0.3, halation:6,  vignette:20, dither:2 },
+  "Ektar 100":      { tag:"vivid · ultra-fine",     temperature:2,   tint:0,   saturation:140, contrast:20,  fade:0,  grain:4,  grainSize:1,   colorNoise:2,  roughness:4,  softness:0,   chromatic:0,   halation:0,  vignette:10, dither:2 },
+  "CineStill 800T": { tag:"tungsten · red halation", temperature:-20, tint:-4,  saturation:105, contrast:8,   fade:8,  grain:20, grainSize:2,   colorNoise:8,  roughness:8,  softness:1,   chromatic:1.0, halation:65, vignette:25, dither:0 },
+  "Superia 400":    { tag:"fuji green · punchy",    temperature:-8,  tint:-14, saturation:118, contrast:10,  fade:6,  grain:18, grainSize:2,   colorNoise:9,  roughness:12, softness:0.5, chromatic:0.3, halation:0,  vignette:18, dither:2 },
+  "HP5 Plus":       { tag:"b&w · classic grain",    temperature:0,   tint:0,   saturation:0,   contrast:8,   fade:8,  grain:22, grainSize:2,   colorNoise:0,  roughness:10, softness:0.5, chromatic:0,   halation:0,  vignette:15, dither:2 },
+  "Tri-X 400":      { tag:"b&w · gritty press",     temperature:0,   tint:0,   saturation:0,   contrast:20,  fade:6,  grain:28, grainSize:2.5, colorNoise:0,  roughness:14, softness:0,   chromatic:0,   halation:0,  vignette:22, dither:1 },
+  "T-Max 3200":     { tag:"b&w · extreme grain",    temperature:0,   tint:0,   saturation:0,   contrast:16,  fade:10, grain:45, grainSize:3,   colorNoise:0,  roughness:16, softness:0.5, chromatic:0,   halation:0,  vignette:25, dither:0 },
+  "VHS":            { tag:"tape · chroma bleed",    temperature:4,   tint:8,   saturation:128, contrast:6,   fade:18, grain:26, grainSize:2,   colorNoise:24, roughness:14, softness:4,   chromatic:4.5, halation:12, vignette:32, dither:8 },
+};
+
+const settings = {};
+CONTROLS.forEach(c => settings[c.key] = c.def);
+
+// ── Build UI ──
+const panel = document.getElementById("controls");
+
+function makeSectionLabel(text) {
+  const el = document.createElement("div");
+  el.className = "section-label";
+  el.textContent = text;
+  return el;
+}
+
+// Presets
+panel.appendChild(makeSectionLabel("Film Presets"));
+const presetGrid = document.createElement("div");
+presetGrid.className = "preset-grid";
+Object.keys(PRESETS).forEach(name => {
+  const b = document.createElement("button");
+  b.className = "preset-btn";
+  b.dataset.preset = name;
+  b.innerHTML = `${name}<span class="preset-tag">${PRESETS[name].tag}</span>`;
+  b.addEventListener("click", () => applyPreset(name));
+  presetGrid.appendChild(b);
+});
+panel.appendChild(presetGrid);
+const presetNote = document.createElement("div");
+presetNote.className = "preset-note";
+presetNote.textContent = "Each preset emulates the stock's color cast, contrast, grain and optics. Tweak any slider and it becomes your own.";
+panel.appendChild(presetNote);
+
+const tooltipBox = document.createElement("div");
+tooltipBox.className = "tooltip-box";
+tooltipBox.textContent = "← hover a parameter, tap ⓘ for its story";
+
+function buildParam(c) {
+  const wrap = document.createElement("div");
+  wrap.className = "param";
+  const dec = c.step < 1 ? 1 : 0;
+  const hasMid = c.min < 0; // bipolar sliders get a center notch
+
+  wrap.innerHTML = `
+    <div class="param-header">
+      <span class="param-name-wrap">
+        <span class="param-name">${c.label}</span>
+        <span class="info-dot" tabindex="0" role="button" aria-label="About ${c.label}" data-info="${c.key}">i</span>
+      </span>
+      <span class="param-value" id="val-${c.key}">${c.def.toFixed(dec)}</span>
+    </div>
+    <div class="slider-wrap">
+      <div class="slider-track"></div>
+      ${hasMid ? '<div class="slider-mid" style="left:50%"></div>' : ''}
+      <div class="slider-fill" id="fill-${c.key}"></div>
+      <input type="range" min="${c.min}" max="${c.max}" step="${c.step}" value="${c.def}" id="range-${c.key}" aria-label="${c.label}">
+      <div class="slider-thumb" id="thumb-${c.key}"></div>
+    </div>
+  `;
+
+  wrap.addEventListener("mouseenter", () => { tooltipBox.textContent = c.tip; });
+  wrap.addEventListener("mouseleave", () => { tooltipBox.textContent = "← hover a parameter, tap ⓘ for its story"; });
+
+  const range = wrap.querySelector(`#range-${c.key}`);
+  const fill  = wrap.querySelector(`#fill-${c.key}`);
+  const thumb = wrap.querySelector(`#thumb-${c.key}`);
+  const val   = wrap.querySelector(`#val-${c.key}`);
+
+  function updateSlider(v) {
+    const pct = ((v - c.min) / (c.max - c.min)) * 100;
+    thumb.style.left = pct + "%";
+    val.textContent = parseFloat(v).toFixed(dec);
+    if (hasMid) {
+      // fill from center outward for bipolar sliders
+      const zero = ((0 - c.min) / (c.max - c.min)) * 100;
+      const lo = Math.min(zero, pct), hi = Math.max(zero, pct);
+      fill.style.left = lo + "%";
+      fill.style.width = (hi - lo) + "%";
+    } else {
+      fill.style.left = "0%";
+      fill.style.width = pct + "%";
+    }
+  }
+  updateSlider(c.def);
+  c._updateSlider = updateSlider;
+
+  range.addEventListener("input", () => {
+    const v = parseFloat(range.value);
+    settings[c.key] = v;
+    updateSlider(v);
+    if (activePreset) { activePreset = null; refreshPresetButtons(); }
+    scheduleProcess();
+  });
+
+  wrap.querySelector(".info-dot").addEventListener("click", () => openInfo(c.key));
+  wrap.querySelector(".info-dot").addEventListener("keydown", e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); openInfo(c.key); } });
+
+  return wrap;
+}
+
+panel.appendChild(makeSectionLabel("Color"));
+CONTROLS.filter(c => c.group === "color").forEach(c => panel.appendChild(buildParam(c)));
+panel.appendChild(makeSectionLabel("Texture & Optics"));
+CONTROLS.filter(c => c.group === "texture").forEach(c => panel.appendChild(buildParam(c)));
+
+panel.appendChild(tooltipBox);
+
+const btnGroup = document.createElement("div");
+btnGroup.className = "btn-group";
+btnGroup.innerHTML = `
+  <button id="cameraBtn">⊙ Live Camera</button>
+  <button id="rerollBtn">Re-roll Grain</button>
+  <button id="resetBtn">Reset</button>
+  <button class="primary" id="exportBtn" disabled>Export PNG</button>
+`;
+panel.appendChild(btnGroup);
+
+// ── Info modal ──
+const infoModal = document.getElementById("infoModal");
+const infoTitle = document.getElementById("infoTitle");
+const infoSub   = document.getElementById("infoSub");
+const infoWas   = document.getElementById("infoWas");
+const infoDoes  = document.getElementById("infoDoes");
+function openInfo(key) {
+  const c = CONTROLS.find(x => x.key === key);
+  if (!c) return;
+  infoTitle.textContent = c.label;
+  infoSub.textContent = c.group === "color" ? "Color Grade" : "Texture & Optics";
+  infoWas.textContent = c.was;
+  infoDoes.textContent = c.does;
+  infoModal.classList.add("open");
+}
+function closeInfo() { infoModal.classList.remove("open"); }
+document.getElementById("infoClose").addEventListener("click", closeInfo);
+infoModal.addEventListener("click", e => { if (e.target === infoModal) closeInfo(); });
+window.addEventListener("keydown", e => { if (e.key === "Escape") closeInfo(); });
+
+// ── Refs ──
+const canvas  = document.getElementById("output");
+const srcImg  = document.getElementById("srcImg");
+const srcVideoEl = document.getElementById("srcVideoEl");
+const fileInput = document.getElementById("fileInput");
+const dropZone  = document.getElementById("dropZone");
+const canvasWrap = document.getElementById("canvasWrap");
+const dimLabel  = document.getElementById("dimLabel");
+const exportBtn = document.getElementById("exportBtn");
+const resetBtn  = document.getElementById("resetBtn");
+const rerollBtn = document.getElementById("rerollBtn");
+const swapBtn   = document.getElementById("swapBtn");
+const compareBtn = document.getElementById("compareBtn");
+const cameraBtn = document.getElementById("cameraBtn");
+const cameraIndicator = document.getElementById("cameraIndicator");
+
+let processTimer = null;
+
+function refreshPresetButtons() {
+  presetGrid.querySelectorAll(".preset-btn").forEach(b => {
+    b.classList.toggle("active", b.dataset.preset === activePreset);
+  });
+}
+
+function applyPreset(name) {
+  const p = PRESETS[name];
+  if (!p) return;
+  CONTROLS.forEach(c => {
+    const v = (p[c.key] !== undefined) ? p[c.key] : c.def;
+    settings[c.key] = v;
+    const range = document.getElementById(`range-${c.key}`);
+    range.value = v;
+    c._updateSlider(v);
+  });
+  activePreset = name;
+  refreshPresetButtons();
+  scheduleProcess();
+}
+
+function scheduleProcess() {
+  if (mode !== 'image') return;
+  clearTimeout(processTimer);
+  processTimer = setTimeout(process, 60);
+}
+
+// ── Video loop ──
+function startVideoLoop() {
+  if (videoRafId) cancelAnimationFrame(videoRafId);
+  function tick() {
+    if (mode === 'image') { videoRafId = null; return; }
+    process();
+    videoRafId = requestAnimationFrame(tick);
+  }
+  videoRafId = requestAnimationFrame(tick);
+}
+function stopVideoLoop() { if (videoRafId) { cancelAnimationFrame(videoRafId); videoRafId = null; } }
+function getSource() { return mode === 'image' ? srcImg : srcVideoEl; }
+
+// ── Helpers ──
+function mulberry32(a) {
+  return function () {
+    a |= 0; a = a + 0x6D2B79F5 | 0;
+    let t = Math.imul(a ^ a >>> 15, 1 | a);
+    t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+    return ((t ^ t >>> 14) >>> 0) / 4294967296;
+  };
+}
+function clamp(v) { return v < 0 ? 0 : v > 255 ? 255 : v; }
+
+// reusable offscreen canvases
+const work = document.createElement("canvas");
+const offR = document.createElement("canvas");
+const offB = document.createElement("canvas");
+const noiseSmall = document.createElement("canvas");
+const noiseFull = document.createElement("canvas");
+const halo = document.createElement("canvas");
+
+// Build a size-aware luminance grain field (returns Uint8 grayscale data)
+function grainField(W, H, gs, seed) {
+  const sw = Math.max(1, Math.round(W / gs));
+  const sh = Math.max(1, Math.round(H / gs));
+  const rand = mulberry32(seed);
+  noiseSmall.width = sw; noiseSmall.height = sh;
+  const nctx = noiseSmall.getContext("2d", { willReadFrequently: true });
+  const id = nctx.createImageData(sw, sh);
+  for (let i = 0; i < sw * sh; i++) {
+    const v = rand() * 255;
+    id.data[i*4] = id.data[i*4+1] = id.data[i*4+2] = v;
+    id.data[i*4+3] = 255;
+  }
+  nctx.putImageData(id, 0, 0);
+  noiseFull.width = W; noiseFull.height = H;
+  const fctx = noiseFull.getContext("2d", { willReadFrequently: true });
+  fctx.imageSmoothingEnabled = gs > 1; // soften only when grain is larger than a pixel
+  fctx.drawImage(noiseSmall, 0, 0, W, H);
+  return fctx.getImageData(0, 0, W, H).data;
+}
+
+function process() {
+  const source = getSource();
+  if (mode === 'image') {
+    if (!srcImg.src || !srcImg.complete || !srcImg.naturalWidth) return;
+  } else {
+    if (!source || source.readyState < 2) return;
+    videoFrameCount++;
+  }
+  render(source);
+}
+
+function render(source) {
+  const W = source.videoWidth  || source.naturalWidth;
+  const H = source.videoHeight || source.naturalHeight;
+  canvas.width = W; canvas.height = H;
+  const ctx = canvas.getContext("2d", { willReadFrequently: true });
+  dimLabel.textContent = `${W} × ${H}`;
+
+  if (showOriginal) { ctx.drawImage(source, 0, 0, W, H); return; }
+
+  const s = settings;
+
+  // 1. Softened base (optical diffusion)
+  work.width = W; work.height = H;
+  const wctx = work.getContext("2d", { willReadFrequently: true });
+  wctx.filter = s.softness > 0 ? `blur(${s.softness}px)` : "none";
+  wctx.drawImage(source, 0, 0, W, H);
+  wctx.filter = "none";
+
+  // 2. Chromatic aberration (from the softened base)
+  if (s.chromatic > 0) {
+    const shift = Math.max(1, Math.round(s.chromatic));
+    offR.width = W; offR.height = H; offB.width = W; offB.height = H;
+    offR.getContext("2d", { willReadFrequently: true }).drawImage(work, -shift, 0, W + shift, H);
+    offB.getContext("2d", { willReadFrequently: true }).drawImage(work,  shift, 0, W - shift, H);
+    ctx.drawImage(work, 0, 0);
+    const base = ctx.getImageData(0, 0, W, H);
+    const rData = offR.getContext("2d", { willReadFrequently: true }).getImageData(0, 0, W, H);
+    const bData = offB.getContext("2d", { willReadFrequently: true }).getImageData(0, 0, W, H);
+    for (let i = 0; i < base.data.length; i += 4) {
+      base.data[i]     = rData.data[i];
+      base.data[i + 2] = bData.data[i + 2];
+    }
+    ctx.putImageData(base, 0, 0);
+  } else {
+    ctx.drawImage(work, 0, 0);
+  }
+
+  // 3. Pixel pass: color grade → grain/noise → vignette
+  const img = ctx.getImageData(0, 0, W, H);
+  const d = img.data;
+
+  const seed = (mode === 'image') ? grainSeed : (grainSeed + (videoFrameCount >> 2));
+  const field = s.grain > 0 ? grainField(W, H, s.grainSize, seed) : null;
+  const rand = mulberry32(seed ^ 0x9e3779b9);
+
+  const tempK = s.temperature * 0.4;
+  const tintK = s.tint * 0.3;
+  const satF  = s.saturation / 100;
+  const cF    = (259 * (s.contrast + 255)) / (255 * (259 - s.contrast)); // contrast factor
+  const fadeF = (255 - s.fade) / 255;
+
+  const cx = W / 2, cy = H / 2;
+  const maxDist = Math.sqrt(cx * cx + cy * cy);
+
+  for (let y = 0; y < H; y++) {
+    for (let x = 0; x < W; x++) {
+      const idx = (y * W + x) * 4;
+      let r = d[idx], g = d[idx+1], b = d[idx+2];
+
+      // white balance
+      if (tempK) { r += tempK; b -= tempK; }
+      if (tintK) { r += tintK * 0.5; b += tintK * 0.5; g -= tintK; }
+
+      // saturation
+      if (satF !== 1) {
+        const lum = 0.299*r + 0.587*g + 0.114*b;
+        r = lum + (r - lum) * satF;
+        g = lum + (g - lum) * satF;
+        b = lum + (b - lum) * satF;
+      }
+      // contrast
+      if (s.contrast) {
+        r = cF * (r - 128) + 128;
+        g = cF * (g - 128) + 128;
+        b = cF * (b - 128) + 128;
+      }
+      // fade (lift blacks)
+      if (s.fade) {
+        r = s.fade + r * fadeF;
+        g = s.fade + g * fadeF;
+        b = s.fade + b * fadeF;
+      }
+      // grain (size-aware luminance)
+      if (field) {
+        const n = (field[idx] / 255 - 0.5) * 2 * s.grain;
+        r += n; g += n; b += n;
+      }
+      // color noise
+      if (s.colorNoise > 0) {
+        r += (rand() - 0.5) * 2 * s.colorNoise;
+        g += (rand() - 0.5) * 2 * s.colorNoise;
+        b += (rand() - 0.5) * 2 * s.colorNoise;
+      }
+      // roughness
+      if (s.roughness > 0) {
+        const lum = 0.299*r + 0.587*g + 0.114*b;
+        const bump = (rand() - 0.5) * s.roughness * (lum / 255);
+        r += bump; g += bump; b += bump;
+      }
+      // dither
+      if (s.dither > 0) {
+        const q = s.dither;
+        r = Math.round(r / q) * q + rand() * q;
+        g = Math.round(g / q) * q + rand() * q;
+        b = Math.round(b / q) * q + rand() * q;
+      }
+      // vignette
+      if (s.vignette > 0) {
+        const dx = x - cx, dy = y - cy;
+        const dist = Math.sqrt(dx*dx + dy*dy) / maxDist;
+        const vig = 1 - (s.vignette / 100) * Math.pow(dist, 1.6);
+        r *= vig; g *= vig; b *= vig;
+      }
+
+      d[idx]   = clamp(r);
+      d[idx+1] = clamp(g);
+      d[idx+2] = clamp(b);
+    }
+  }
+  ctx.putImageData(img, 0, 0);
+
+  // 4. Halation
+  if (s.halation > 0) {
+    halo.width = W; halo.height = H;
+    const hctx = halo.getContext("2d", { willReadFrequently: true });
+    hctx.drawImage(canvas, 0, 0);
+    const hd = hctx.getImageData(0, 0, W, H);
+    for (let i = 0; i < hd.data.length; i += 4) {
+      const lum = 0.299*hd.data[i] + 0.587*hd.data[i+1] + 0.114*hd.data[i+2];
+      const mask = Math.max(0, lum - 180) / 75;
+      hd.data[i]   = hd.data[i]   * mask;
+      hd.data[i+1] = hd.data[i+1] * mask * 0.5;
+      hd.data[i+2] = hd.data[i+2] * mask * 0.3;
+      hd.data[i+3] = 255 * mask * (s.halation / 100);
+    }
+    hctx.putImageData(hd, 0, 0);
+    ctx.filter = `blur(${Math.round(s.halation / 8)}px)`;
+    ctx.globalCompositeOperation = "screen";
+    ctx.drawImage(halo, 0, 0);
+    ctx.filter = "none";
+    ctx.globalCompositeOperation = "source-over";
+  }
+}
+
+// ── File loading ──
+function activateCanvas() {
+  dropZone.style.display = "none";
+  canvasWrap.classList.add("visible");
+  exportBtn.disabled = false;
+}
+function releaseObjectURL() {
+  if (currentObjectURL) { URL.revokeObjectURL(currentObjectURL); currentObjectURL = null; }
+}
+function stopCamera() {
+  if (cameraStream) { cameraStream.getTracks().forEach(t => t.stop()); cameraStream = null; }
+  srcVideoEl.srcObject = null;
+  cameraIndicator.style.display = 'none';
+  cameraBtn.textContent = '⊙ Live Camera';
+}
+function baseName(name) {
+  return (name || 'deglazer').replace(/\.[^/.]+$/, '').replace(/[^\w\-]+/g, '_') || 'deglazer';
+}
+function loadFile(file) {
+  if (!file) return;
+  stopCamera(); stopVideoLoop(); releaseObjectURL();
+  sourceName = baseName(file.name);
+  videoFrameCount = 0;
+
+  if (file.type.startsWith('video/')) {
+    mode = 'video';
+    currentObjectURL = URL.createObjectURL(file);
+    srcVideoEl.src = currentObjectURL;
+    srcVideoEl.onloadedmetadata = () => { activateCanvas(); srcVideoEl.play(); startVideoLoop(); };
+  } else if (file.type.startsWith('image/')) {
+    mode = 'image';
+    currentObjectURL = URL.createObjectURL(file);
+    srcImg.onload = () => { activateCanvas(); process(); };
+    srcImg.onerror = () => alert('Could not load that image.');
+    srcImg.src = currentObjectURL;
+  } else {
+    alert('Unsupported file type.');
+  }
+}
+async function startCamera() {
+  if (cameraStream) { stopCamera(); stopVideoLoop(); mode = 'image'; return; }
+  stopVideoLoop();
+  try {
+    cameraStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' }, audio: false });
+    mode = 'camera';
+    videoFrameCount = 0;
+    sourceName = 'deglazer-camera';
+    srcVideoEl.srcObject = cameraStream;
+    srcVideoEl.onloadedmetadata = () => { activateCanvas(); srcVideoEl.play(); startVideoLoop(); };
+    cameraIndicator.style.display = 'inline';
+    cameraBtn.textContent = '⊙ Stop Camera';
+  } catch (e) {
+    alert('Camera access denied: ' + (e.message || e));
+  }
+}
+
+// ── Events ──
+dropZone.addEventListener("click", () => fileInput.click());
+dropZone.addEventListener("dragover", e => { e.preventDefault(); dropZone.classList.add("drag-over"); });
+dropZone.addEventListener("dragleave", () => dropZone.classList.remove("drag-over"));
+dropZone.addEventListener("drop", e => { e.preventDefault(); dropZone.classList.remove("drag-over"); loadFile(e.dataTransfer.files[0]); });
+fileInput.addEventListener("change", e => loadFile(e.target.files[0]));
+swapBtn.addEventListener("click", () => fileInput.click());
+cameraBtn.addEventListener("click", startCamera);
+
+function setCompare(on) {
+  showOriginal = on;
+  compareBtn.classList.toggle("active", on);
+  if (mode === 'image') process();
+}
+compareBtn.addEventListener("mousedown", () => setCompare(true));
+compareBtn.addEventListener("touchstart", e => { e.preventDefault(); setCompare(true); }, { passive: false });
+window.addEventListener("mouseup", () => { if (showOriginal) setCompare(false); });
+window.addEventListener("touchend", () => { if (showOriginal) setCompare(false); });
+
+rerollBtn.addEventListener("click", () => { grainSeed = (Math.random() * 1e6) | 0; if (mode === 'image') process(); });
+
+resetBtn.addEventListener("click", () => {
+  activePreset = null; refreshPresetButtons();
+  CONTROLS.forEach(c => {
+    settings[c.key] = c.def;
+    const range = document.getElementById(`range-${c.key}`);
+    range.value = c.def;
+    c._updateSlider(c.def);
+  });
+  scheduleProcess();
+});
+
+exportBtn.addEventListener("click", () => {
+  const wasOriginal = showOriginal;
+  if (wasOriginal) { showOriginal = false; process(); }
+  const a = document.createElement("a");
+  const tag = activePreset ? '-' + activePreset.toLowerCase().replace(/[^\w]+/g, '') : '';
+  a.download = `${sourceName}${tag}-deglazed.png`;
+  a.href = canvas.toDataURL("image/png");
+  a.click();
+  if (wasOriginal) { showOriginal = true; }
+});
+</script>
+</body>
+</html>
