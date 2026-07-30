@@ -1,0 +1,379 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="description" content="Analog Fidelity Lab, a rack of browser-based hardware emulation tools: Deglazer, CRT Lab, and N64 Lab.">
+<title>Analog Fidelity Lab</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Big+Shoulders+Stencil:wght@700;800&family=Chakra+Petch:wght@400;500;600;700&family=Share+Tech+Mono&display=swap');
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --bg:        #09090a;
+  --chassis:   #131315;
+  --panel:     #171719;
+  --panel-2:   #1d1d20;
+  --steel:     #2b2b2f;
+  --steel-hi:  #3a3a40;
+  --text:      #e4e1d8;
+  --text-dim:  #8a8780;
+  --text-mute: #57544d;
+
+  --bronze:    #c8a96e;
+  --bronze-glow: #c8a96e55;
+  --phosphor:  #00ff9c;
+  --phosphor-glow: #00ff9c55;
+  --n64-blue:  #2f8fff;
+  --n64-red:   #e4002b;
+  --n64-yellow:#ffcc00;
+  --n64-green: #00b050;
+
+  --display: 'Big Shoulders Stencil', 'Arial Narrow', sans-serif;
+  --ui: 'Chakra Petch', 'Segoe UI', system-ui, sans-serif;
+  --mono: 'Share Tech Mono', 'Consolas', monospace;
+}
+
+html { color-scheme: dark; }
+
+body {
+  background:
+    radial-gradient(ellipse 900px 500px at 50% -10%, rgba(200,169,110,0.05), transparent 60%),
+    var(--bg);
+  color: var(--text);
+  font-family: var(--ui);
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 28px 16px 60px;
+  position: relative;
+  filter: brightness(0.94) saturate(0.94);
+  transition: filter 0.6s ease;
+}
+body.online { filter: brightness(1) saturate(1); }
+
+/* faint CRT scanlines tying the whole rack together */
+body::before {
+  content: "";
+  position: fixed; inset: 0;
+  pointer-events: none;
+  z-index: 50;
+  background: repeating-linear-gradient(
+    to bottom,
+    rgba(255,255,255,0.018) 0px,
+    rgba(255,255,255,0.018) 1px,
+    transparent 1px,
+    transparent 3px
+  );
+  opacity: 0.5;
+}
+
+a { color: inherit; }
+
+.rack {
+  width: 100%;
+  max-width: 760px;
+}
+
+/* ── Header / power supply strip ───────────────────────── */
+.psu {
+  background: linear-gradient(180deg, #1a1a1d, #101012);
+  border: 1px solid var(--steel);
+  border-radius: 10px 10px 6px 6px;
+  padding: 18px 22px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  box-shadow: 0 14px 40px rgba(0,0,0,0.6), inset 0 1px 0 rgba(255,255,255,0.04);
+  position: relative;
+}
+.psu::before, .psu::after {
+  content: "";
+  position: absolute; top: 9px; width: 6px; height: 6px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 35%, #55534c, #201f1c);
+  box-shadow: inset 0 0 0 1px #000;
+}
+.psu::before { left: 10px; }
+.psu::after  { right: 10px; }
+
+.brand { display: flex; align-items: baseline; gap: 12px; }
+.brand .mark {
+  font-family: var(--display);
+  font-weight: 800;
+  font-size: 26px;
+  letter-spacing: 0.04em;
+  color: #f1eee4;
+  text-shadow: 0 0 18px rgba(200,169,110,0.25);
+}
+.brand .mark span { color: var(--bronze); }
+.brand .tag {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--text-mute);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.pwr {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+  background: none;
+  border: none;
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  padding: 6px 8px;
+}
+.pwr .led {
+  width: 9px; height: 9px; border-radius: 50%;
+  background: #3a1616;
+  box-shadow: inset 0 0 0 1px #000;
+  transition: background 0.4s, box-shadow 0.4s;
+}
+body.online .pwr .led {
+  background: var(--phosphor);
+  box-shadow: 0 0 8px var(--phosphor), 0 0 2px var(--phosphor);
+}
+body.online .pwr .state::after { content: "online"; color: var(--phosphor); }
+body:not(.online) .pwr .state::after { content: "standby"; }
+
+.sub {
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--text-mute);
+  text-align: center;
+  margin: 14px 4px 22px;
+  letter-spacing: 0.04em;
+}
+
+/* ── Rack units ─────────────────────────────────────────── */
+.units { display: flex; flex-direction: column; gap: 10px; }
+
+.unit {
+  --accent: var(--phosphor);
+  background: linear-gradient(180deg, var(--panel-2), var(--panel));
+  border: 1px solid var(--steel);
+  border-left: 3px solid var(--accent);
+  border-radius: 6px;
+  padding: 16px 18px;
+  display: grid;
+  grid-template-columns: 56px 1fr auto;
+  align-items: center;
+  gap: 16px;
+  position: relative;
+  box-shadow: 0 8px 22px rgba(0,0,0,0.45), inset 0 1px 0 rgba(255,255,255,0.03);
+  text-decoration: none;
+  color: inherit;
+  transition: transform 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
+}
+.unit:hover, .unit:focus-visible {
+  transform: translateX(2px);
+  box-shadow: 0 8px 26px rgba(0,0,0,0.55), 0 0 0 1px var(--accent), inset 0 1px 0 rgba(255,255,255,0.04);
+  outline: none;
+}
+.unit:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+.unit .id {
+  font-family: var(--display);
+  font-weight: 800;
+  font-size: 13px;
+  color: var(--accent);
+  writing-mode: vertical-rl;
+  text-orientation: mixed;
+  letter-spacing: 0.14em;
+  text-align: center;
+  justify-self: center;
+}
+
+.unit .meta { min-width: 0; }
+.unit .name {
+  font-family: var(--ui);
+  font-weight: 700;
+  font-size: 19px;
+  letter-spacing: 0.01em;
+  color: var(--text);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.unit .name .led {
+  width: 7px; height: 7px; border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 7px var(--accent);
+  flex: none;
+}
+.unit .desc {
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--text-dim);
+  margin-top: 4px;
+  line-height: 1.5;
+}
+
+/* idling VU meter, per-unit accent */
+.vu {
+  display: flex;
+  align-items: flex-end;
+  gap: 2px;
+  height: 20px;
+  margin-top: 8px;
+}
+.vu i {
+  width: 3px;
+  background: var(--accent);
+  opacity: 0.5;
+  border-radius: 1px;
+  animation: bounce 1.6s ease-in-out infinite;
+}
+.vu i:nth-child(1){ height: 30%; animation-delay: 0s; }
+.vu i:nth-child(2){ height: 70%; animation-delay: 0.15s; }
+.vu i:nth-child(3){ height: 45%; animation-delay: 0.3s; }
+.vu i:nth-child(4){ height: 90%; animation-delay: 0.45s; }
+.vu i:nth-child(5){ height: 55%; animation-delay: 0.6s; }
+.vu i:nth-child(6){ height: 35%; animation-delay: 0.75s; }
+.vu i:nth-child(7){ height: 65%; animation-delay: 0.9s; }
+@keyframes bounce {
+  0%, 100% { transform: scaleY(0.5); opacity: 0.4; }
+  50% { transform: scaleY(1); opacity: 0.9; }
+}
+
+.unit .open {
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--accent);
+  border: 1px solid var(--accent);
+  border-radius: 4px;
+  padding: 8px 12px;
+  white-space: nowrap;
+  background: color-mix(in srgb, var(--accent) 8%, transparent);
+}
+
+/* per-unit accent + tri-color N64 nod */
+.unit.deglazer { --accent: var(--bronze); }
+.unit.crt      { --accent: var(--phosphor); }
+.unit.n64      { --accent: var(--n64-blue); }
+.unit.n64 .vu i:nth-child(1){ background: var(--n64-red); }
+.unit.n64 .vu i:nth-child(3){ background: var(--n64-yellow); }
+.unit.n64 .vu i:nth-child(5){ background: var(--n64-green); }
+.unit.n64 .vu i:nth-child(7){ background: var(--n64-red); }
+
+/* ── Signal chain footer ────────────────────────────────── */
+.chain {
+  margin-top: 26px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--text-mute);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  flex-wrap: wrap;
+}
+.chain .dot { width: 4px; height: 4px; border-radius: 50%; background: var(--text-mute); }
+.chain .node { color: var(--text-dim); }
+
+.footer-links {
+  margin-top: 18px;
+  text-align: center;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--text-mute);
+}
+.footer-links a { color: var(--text-dim); text-decoration: underline dotted; text-underline-offset: 3px; }
+.footer-links a:hover { color: var(--phosphor); }
+
+@media (max-width: 520px) {
+  .unit { grid-template-columns: 32px 1fr; }
+  .unit .open { grid-column: 1 / -1; justify-self: start; }
+  .unit .id { writing-mode: horizontal-tb; font-size: 11px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .vu i { animation: none; transform: scaleY(0.7); }
+  body { transition: none; }
+}
+</style>
+</head>
+<body class="online">
+
+<div class="rack">
+  <div class="psu">
+    <div class="brand">
+      <div class="mark">ANALOG<span>·</span>FIDELITY<span>·</span>LAB</div>
+    </div>
+    <button class="pwr" id="pwrToggle" type="button" aria-pressed="true">
+      <span class="led"></span>
+      <span class="state"></span>
+    </button>
+  </div>
+
+  <div class="sub">three-unit rack &nbsp;·&nbsp; browser-based hardware emulation &nbsp;·&nbsp; no dependencies, no uploads leave your machine</div>
+
+  <div class="units">
+    <a class="unit deglazer" href="deglazer.html">
+      <span class="id">AFL·001</span>
+      <span class="meta">
+        <span class="name"><span class="led"></span>Deglazer</span>
+        <span class="desc">Film-stock texture restoration - grain, halation, chromatic aberration for AI art that looks too clean.</span>
+        <span class="vu" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i></span>
+      </span>
+      <span class="open">Open unit →</span>
+    </a>
+
+    <a class="unit crt" href="CRT_Lab.html">
+      <span class="id">AFL·002</span>
+      <span class="meta">
+        <span class="name"><span class="led"></span>CRT Lab</span>
+        <span class="desc">Authentic phosphor emulator - shadow mask, scanlines, bloom and convergence error, modeled on real tube behavior.</span>
+        <span class="vu" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i></span>
+      </span>
+      <span class="open">Open unit →</span>
+    </a>
+
+    <a class="unit n64" href="N64_Lab.html">
+      <span class="id">AFL·003</span>
+      <span class="meta">
+        <span class="name"><span class="led"></span>N64 Lab</span>
+        <span class="desc">RCP hardware pipeline converter - trilinear filtering, dithering and low-res reconstruction of the N64's render path.</span>
+        <span class="vu" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i></span>
+      </span>
+      <span class="open">Open unit →</span>
+    </a>
+  </div>
+
+  <div class="chain" aria-hidden="true">
+    <span class="node">SOURCE IMAGE</span><span class="dot"></span>
+    <span class="node">001</span><span class="dot"></span>
+    <span class="node">002</span><span class="dot"></span>
+    <span class="node">003</span><span class="dot"></span>
+    <span class="node">OUTPUT</span>
+  </div>
+
+  <div class="footer-links">
+    <a href="https://github.com/Kasai-Kitsune" target="_blank" rel="noopener">github.com/Kasai-Kitsune</a>, part of the Analog Fidelity Lab set
+  </div>
+</div>
+
+<script>
+  const body = document.body;
+  const btn = document.getElementById('pwrToggle');
+  btn.addEventListener('click', () => {
+    const isOnline = body.classList.toggle('online');
+    btn.setAttribute('aria-pressed', String(isOnline));
+  });
+</script>
+
+</body>
+</html>
