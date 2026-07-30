@@ -1,0 +1,785 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>N64 Hardware Converter, Authentic RCP Pipeline</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@600;700;900&family=Chakra+Petch:wght@400;500;600;700&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg2: #0d0d11;
+  --panel: #2c2c33;
+  --panel2: #202024;
+  --plastic: #35353c;
+  --plastic-hi: #47474f;
+  --border: #4a4a53;
+  --text: #ececf1;
+  --muted: #9b9ba8;
+  --red: #e4002b;
+  --blue: #0084ff;
+  --green: #00b050;
+  --yellow: #ffcc00;
+  --display: 'Orbitron', 'Arial Black', Impact, sans-serif;
+  --ui: 'Chakra Petch', 'Segoe UI', system-ui, sans-serif;
+  --mono: 'Share Tech Mono', 'Consolas', monospace;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  background:
+    radial-gradient(1100px 550px at 50% -8%, rgba(0,132,255,0.07), transparent 60%),
+    radial-gradient(circle at 50% 38%, #1b1b21, var(--bg2) 92%);
+  background-attachment: fixed;
+  color: var(--text);
+  font-family: var(--ui);
+  line-height: 1.5;
+  min-height: 100vh;
+}
+body::before {
+  content: ""; position: fixed; inset: 0; pointer-events: none; z-index: 0;
+  background-image: radial-gradient(rgba(255,255,255,0.022) 1px, transparent 1px);
+  background-size: 4px 4px;
+}
+
+/* ── Header ── */
+header {
+  background: linear-gradient(180deg, #000 0%, #0b0b0f 100%);
+  border-bottom: 3px solid #000;
+  box-shadow: 0 2px 0 var(--red), 0 4px 0 var(--yellow), 0 6px 0 var(--green), 0 8px 0 var(--blue), 0 14px 34px rgba(0,0,0,0.65);
+  padding: 13px 20px 15px;
+  position: sticky; top: 0; z-index: 20;
+}
+.hdr-inner { max-width: 1400px; margin: 0 auto; display: flex; align-items: center; gap: 18px; }
+.brand { display: flex; align-items: center; gap: 14px; }
+
+.logo-strip { display: flex; gap: 3px; height: 34px; padding: 3px; background: #000; border-radius: 4px; box-shadow: inset 0 0 0 1px #262626, 0 2px 6px rgba(0,0,0,0.5); }
+.logo-strip span { width: 6px; height: 100%; border-radius: 1px; box-shadow: inset 0 2px 3px rgba(255,255,255,0.35), 0 0 7px currentColor; }
+.logo-strip .b { background: var(--blue); color: var(--blue); }
+.logo-strip .r { background: var(--red); color: var(--red); }
+.logo-strip .g { background: var(--green); color: var(--green); }
+.logo-strip .y { background: var(--yellow); color: var(--yellow); }
+
+.titles h1 {
+  font-family: var(--display); font-weight: 900; font-size: 25px; letter-spacing: 3px; line-height: 1; color: #fff;
+  text-shadow: 0 2px 0 #000, 0 0 18px rgba(0,132,255,0.35); display: flex; align-items: center;
+}
+.titles h1 .sixtyfour {
+  color: #fff; background: linear-gradient(180deg, #ff4260, var(--red)); padding: 3px 9px; border-radius: 6px; margin-left: 8px; font-size: 21px;
+  box-shadow: 0 3px 0 #8c0019, inset 0 1px 0 rgba(255,255,255,0.45); text-shadow: 0 1px 2px rgba(0,0,0,0.5);
+}
+.titles h1 .filter-word {
+  font-family: var(--display); font-weight: 600; font-size: 20px; letter-spacing: 3px; margin-left: 12px;
+  color: var(--blue); text-shadow: 0 0 12px rgba(0,132,255,0.5); -webkit-text-stroke: 0.5px rgba(0,132,255,0.3);
+}
+.subtitle { font-family: var(--ui); font-weight: 500; font-size: 11px; letter-spacing: 4px; text-transform: uppercase; color: var(--muted); margin-top: 5px; }
+.hdr-badge {
+  margin-left: auto; font-family: var(--mono); font-size: 13px; letter-spacing: 2px; color: var(--yellow);
+  border: 1px solid #43431f; background: rgba(255,204,0,0.07); padding: 7px 13px; border-radius: 5px; box-shadow: inset 0 0 12px rgba(255,204,0,0.08);
+}
+
+main { max-width: 1400px; margin: 26px auto; padding: 0 20px; position: relative; z-index: 1; }
+.workspace { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 20px; }
+
+/* ── Molded-plastic panels ── */
+.panel, .controls {
+  background: linear-gradient(180deg, var(--plastic) 0%, var(--panel) 100%);
+  border: 1px solid var(--border); border-top-color: var(--plastic-hi);
+  border-radius: 12px;
+  box-shadow: 0 10px 30px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.09), inset 0 -3px 8px rgba(0,0,0,0.4);
+}
+.panel { overflow: hidden; }
+.panel-hd {
+  background: linear-gradient(180deg, #1d1d21, #131316);
+  padding: 11px 14px; border-bottom: 2px solid #000;
+  display: flex; justify-content: space-between; align-items: center; gap: 10px;
+  font-family: var(--display); font-weight: 700; font-size: 11px; text-transform: uppercase; letter-spacing: 2px; color: #d2d2e0;
+}
+.panel-hd::before {
+  content: ""; width: 4px; align-self: stretch; margin: -11px 8px -11px -14px;
+  background: linear-gradient(180deg, var(--red), var(--yellow) 33%, var(--green) 66%, var(--blue));
+}
+.panel-hd .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--green); box-shadow: 0 0 8px var(--green); }
+.panel-bd {
+  position: relative; aspect-ratio: 4/3; display: flex; align-items: center; justify-content: center;
+  background: radial-gradient(circle at 50% 45%, #101014, #050506 82%);
+  box-shadow: inset 0 0 44px rgba(0,0,0,0.9), inset 0 0 0 1px #000;
+}
+.panel-bd canvas, .panel-bd .preview { max-width: 100%; max-height: 100%; width: 100%; height: 100%; object-fit: contain; image-rendering: pixelated; position: relative; z-index: 1; }
+.panel-bd::after {
+  content: ""; position: absolute; inset: 0; pointer-events: none; z-index: 3; opacity: 0.22;
+  background: repeating-linear-gradient(0deg, rgba(0,0,0,0.5) 0px, rgba(0,0,0,0.5) 1px, transparent 1px, transparent 3px);
+}
+.dropzone {
+  position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 2;
+  border: 2px dashed #3b3b46; margin: 14px; border-radius: 10px; transition: all .2s; cursor: pointer; text-align: center; padding: 20px;
+  background: rgba(0,0,0,0.25);
+}
+.dropzone:hover, .dropzone.drag { border-color: var(--blue); background: rgba(0,132,255,0.1); box-shadow: inset 0 0 26px rgba(0,132,255,0.22); }
+.dropzone svg { opacity: 0.75; margin-bottom: 12px; color: var(--blue); }
+.dropzone p { font-family: var(--ui); font-size: 14px; color: var(--muted); }
+.dropzone strong { color: var(--text); }
+
+/* ── Controls ── */
+.controls { padding: 20px; display: grid; grid-template-columns: repeat(4, 1fr); gap: 18px; }
+.ctrl { display: flex; flex-direction: column; gap: 7px; }
+.ctrl label { font-family: var(--mono); font-size: 11px; text-transform: uppercase; color: var(--muted); letter-spacing: 1px; display: flex; justify-content: space-between; }
+.ctrl label span { color: var(--yellow); }
+.ctrl select, .ctrl input[type="range"] {
+  background: #0d0d11; border: 1px solid #000; color: var(--text); padding: 9px; border-radius: 6px; font-family: var(--ui); font-weight: 500; font-size: 13px;
+  box-shadow: inset 0 1px 3px rgba(0,0,0,0.6);
+}
+.ctrl select:focus { outline: none; border-color: var(--blue); box-shadow: 0 0 0 2px rgba(0,132,255,0.35); }
+.ctrl input[type="range"] { padding: 0; height: 30px; accent-color: var(--blue); }
+.toggle {
+  display: flex; align-items: center; gap: 9px; padding: 9px 11px; border-radius: 8px; cursor: pointer; user-select: none; transition: all .15s;
+  background: linear-gradient(180deg, #1b1b1f, #101013); border: 1px solid #000;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.06), 0 2px 5px rgba(0,0,0,0.4);
+}
+.toggle input { accent-color: var(--green); width: 15px; height: 15px; }
+.toggle span { font-family: var(--ui); font-weight: 500; font-size: 13px; }
+.toggle:has(input:checked) { border-color: var(--green); box-shadow: inset 0 0 0 1px rgba(0,176,80,0.5), 0 0 13px rgba(0,176,80,0.25); }
+.toggle:has(input:checked) span { color: #7dffb0; }
+
+.actions { display: flex; gap: 10px; margin-top: 16px; grid-column: 1 / -1; flex-wrap: wrap; }
+.btn {
+  background: linear-gradient(180deg, #27272d, #17171a); border: 1px solid #000; border-top-color: #3b3b43;
+  color: var(--text); padding: 11px 17px; border-radius: 8px;
+  font-family: var(--display); font-weight: 700; font-size: 11px; text-transform: uppercase; letter-spacing: 1px; cursor: pointer; transition: all .12s;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.08), 0 3px 0 rgba(0,0,0,0.45), 0 5px 12px rgba(0,0,0,0.3);
+}
+.btn:hover { transform: translateY(-1px); border-top-color: var(--blue); color: #fff; }
+.btn:active { transform: translateY(2px); box-shadow: inset 0 1px 0 rgba(255,255,255,0.05), 0 1px 0 rgba(0,0,0,0.45); }
+.btn.mini { padding: 4px 10px; font-size: 10px; box-shadow: none; }
+.btn.primary {
+  background: linear-gradient(180deg, #ff3355, var(--red)); border-color: #8c0019; color: #fff;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.3), 0 3px 0 #8c0019, 0 5px 14px rgba(228,0,43,0.4);
+}
+.btn.primary:hover { background: linear-gradient(180deg, #ff4a68, #f0002e); }
+.btn:disabled { opacity: 0.32; cursor: not-allowed; transform: none; box-shadow: inset 0 1px 0 rgba(255,255,255,0.04); }
+.btn.camera-active { border-color: var(--green); color: #7dffb0; box-shadow: inset 0 0 0 1px rgba(0,176,80,0.6), 0 0 15px rgba(0,176,80,0.3); }
+
+.stats { display: flex; gap: 16px; flex-wrap: wrap; font-family: var(--mono); font-size: 12px; color: var(--muted); padding: 9px 14px; background: #08080a; border-top: 1px solid #000; letter-spacing: 0.5px; }
+.stats b { color: var(--yellow); font-weight: 400; text-shadow: 0 0 8px rgba(255,204,0,0.5); }
+
+@media (max-width: 980px) {
+  .workspace { grid-template-columns: 1fr; }
+  .controls { grid-template-columns: repeat(2, 1fr); }
+}
+@media (max-width: 560px) {
+  .controls { grid-template-columns: 1fr; }
+  .subtitle, .hdr-badge { display: none; }
+  .titles h1 { font-size: 20px; }
+}
+</style>
+</head>
+<body>
+<header>
+  <div class="hdr-inner">
+    <div class="brand">
+      <div class="logo-strip">
+        <span class="b"></span><span class="r"></span><span class="g"></span><span class="y"></span>
+      </div>
+      <div class="titles">
+        <h1>NINTENDO<span class="sixtyfour">64</span><span class="filter-word">FILTER</span></h1>
+        <div class="subtitle">RCP-Style Image &amp; Video Filter</div>
+      </div>
+    </div>
+    <div class="hdr-badge">RDP &rsaquo; VI &rsaquo; DAC</div>
+  </div>
+</header>
+
+<main>
+  <div class="workspace">
+    <div class="panel">
+      <div class="panel-hd">
+        <span>INPUT / ORIGINAL</span>
+        <button class="btn mini" id="browseBtn" style="margin-left:12px;">📁 Browse</button>
+        <span class="dot" id="inputDot" style="background:#666;box-shadow:none;margin-left:auto;"></span>
+      </div>
+      <div class="panel-bd" id="dropArea">
+        <canvas id="previewCanvas" class="preview"></canvas>
+        <div class="dropzone" id="dropzone">
+          <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+          <p><strong>Drop image or video</strong><br>or click to browse</p>
+          <input type="file" id="fileInput" accept="image/*,video/*" hidden>
+        </div>
+      </div>
+      <div class="stats">
+        <span>IN: <b id="inRes">—</b></span>
+        <span>TYPE: <b id="inType">—</b></span>
+        <span>FPS: <b id="inFps">—</b></span>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-hd">
+        <span>RCP OUTPUT / FRAMEBUFFER</span>
+        <span class="dot" id="outputDot" style="background:#666;box-shadow:none"></span>
+      </div>
+      <div class="panel-bd">
+        <canvas id="outputCanvas"></canvas>
+      </div>
+      <div class="stats">
+        <span>OUT: <b id="outRes">320×240</b></span>
+        <span>COLOR: <b id="outColor">RGBA5551 (32,768)</b></span>
+        <span>TMEM: <b id="outTmem">~4KB</b></span>
+      </div>
+    </div>
+  </div>
+
+  <div class="controls">
+    <div class="ctrl">
+      <label>Resolution <span>RDP</span></label>
+      <select id="resSel">
+        <option value="320x240">320×240 (Authentic NTSC)</option>
+        <option value="480x360">480×360 (Common Hi-Res)</option>
+        <option value="640x222">640×222 (Perfect Dark Hi-Res)</option>
+        <option value="640x480">640×480 (Max, very rare)</option>
+        <option value="292x214">292×214 (Sub-res, Conker)</option>
+      </select>
+    </div>
+    <div class="ctrl">
+      <label>VI Mode</label>
+      <select id="viSel">
+        <option value="blur">Blur (Authentic VI)</option>
+        <option value="off">Clean (RGB mod)</option>
+        <option value="deblur">Deblur (Dev kit)</option>
+      </select>
+    </div>
+    <div class="ctrl">
+      <label>Gamma <span id="gammaVal">1.20</span></label>
+      <input type="range" id="gamma" min="1.0" max="1.4" step="0.01" value="1.2">
+    </div>
+    <div class="ctrl">
+      <label>Presets</label>
+      <button class="btn" id="presetBtn" style="width:100%">Authentic N64 (1996)</button>
+    </div>
+
+    <div class="ctrl"><label class="toggle"><input type="checkbox" id="c16" checked><span>16-bit RGBA5551</span></label></div>
+    <div class="ctrl"><label class="toggle"><input type="checkbox" id="c3pt" checked><span>3-Point Filtering</span></label></div>
+    <div class="ctrl"><label class="toggle"><input type="checkbox" id="cDither" checked><span>Magic-Square Dither</span></label></div>
+    <div class="ctrl"><label class="toggle"><input type="checkbox" id="cAA" checked><span>Coverage AA</span></label></div>
+    <div class="ctrl"><label class="toggle"><input type="checkbox" id="cDivot" checked><span>Divot Filter</span></label></div>
+    <div class="ctrl"><label class="toggle"><input type="checkbox" id="cCRT"><span>Composite Bleed</span></label></div>
+    <div class="ctrl"><label class="toggle"><input type="checkbox" id="cTMEM" checked><span>Enforce 4KB TMEM</span></label></div>
+
+    <div class="actions">
+      <button class="btn primary" id="savePng" disabled>Save PNG</button>
+      <button class="btn" id="saveWebm" disabled>Save WebM (Video)</button>
+      <button class="btn" id="clearBtn">✕ Clear</button>
+      <button class="btn" id="playBtn" disabled style="margin-left:auto">▶ Play / Pause</button>
+      <button class="btn" id="cameraBtn">⊙ Live Camera</button>
+    </div>
+  </div>
+
+</main>
+
+<canvas id="lowres" width="320" height="240" style="display:none"></canvas>
+<video id="srcVideo" muted loop playsinline crossorigin="anonymous" style="display:none"></video>
+
+<script>
+// N64 Authentic Converter - WebGL2 Implementation
+(() => {
+  const $ = id => document.getElementById(id);
+  const dropzone = $('dropzone'), dropArea = $('dropArea'), fileInput = $('fileInput');
+  const previewCanvas = $('previewCanvas'), previewCtx = previewCanvas.getContext('2d', {willReadFrequently:true});
+  const outputCanvas = $('outputCanvas'), lowres = $('lowres'), lowCtx = lowres.getContext('2d', {willReadFrequently:true});
+  const srcVideo = $('srcVideo');
+
+  const ui = {
+    res: $('resSel'), vi: $('viSel'), gamma: $('gamma'), gammaVal: $('gammaVal'),
+    c16: $('c16'), c3pt: $('c3pt'), cDither: $('cDither'), cAA: $('cAA'), cDivot: $('cDivot'), cCRT: $('cCRT'), cTMEM: $('cTMEM'),
+    preset: $('presetBtn'), savePng: $('savePng'), saveWebm: $('saveWebm'), play: $('playBtn'), camera: $('cameraBtn'),
+    clear: $('clearBtn'), browse: $('browseBtn'),
+    inRes: $('inRes'), inType: $('inType'), inFps: $('inFps'), outRes: $('outRes'), outColor: $('outColor'),
+    inDot: $('inputDot'), outDot: $('outputDot')
+  };
+
+  let source = null, isVideo = false, animId = null, recorder = null, cameraStream = null;
+
+  // --- WebGL2 Setup ---
+  const gl = outputCanvas.getContext('webgl2', {preserveDrawingBuffer:true, antialias:false});
+  if (!gl) alert('WebGL2 required');
+
+  const vs = `#version 300 es
+  precision highp float;
+  in vec2 a_pos; out vec2 v_uv;
+  void main(){ v_uv = a_pos*0.5+0.5; gl_Position = vec4(a_pos,0.0,1.0); }`;
+
+  // ══════════════════════════════════════════════════════════════════
+  //  TWO-PASS PIPELINE  (matches real N64 silicon)
+  //  PASS 1  RDP  → rasterises + dithers + quantises to a 16-bit
+  //               framebuffer texture held in "RDRAM" (an FBO).
+  //  PASS 2  VI/DAC → reads that finished framebuffer and applies the
+  //               divot / AA / blur / composite filters while scanning
+  //               it out (upscaling) to the display.
+  // ══════════════════════════════════════════════════════════════════
+
+  // ---- PASS 1 : RDP (render to native-res framebuffer texture) ----
+  const fsRDP = `#version 300 es
+  precision highp float;
+  in vec2 v_uv; out vec4 fragColor;
+  uniform sampler2D u_tex;
+  uniform vec2 u_texSize;
+  uniform int u_bits;
+  uniform int u_3point, u_dither;
+
+  vec4 sample3point(vec2 uv){
+    vec2 p = uv * u_texSize - 0.5;
+    vec2 i = floor(p); vec2 f = fract(p);
+    vec2 s = 1.0 / u_texSize;
+    vec4 a = texture(u_tex, (i + 0.5) * s);
+    vec4 b = texture(u_tex, (i + vec2(1.0,0.0) + 0.5) * s);
+    vec4 c = texture(u_tex, (i + vec2(0.0,1.0) + 0.5) * s);
+    vec4 d = texture(u_tex, (i + vec2(1.0,1.0) + 0.5) * s);
+    if(u_3point==0) return texture(u_tex, uv);
+    // RDP uses 3-point triangular interpolation, not 4-tap bilinear.
+    return (f.x + f.y < 1.0) ? (a*(1.0-f.x-f.y) + b*f.x + c*f.y)
+                            : (d*(f.x+f.y-1.0) + b*(1.0-f.y) + c*(1.0-f.x));
+  }
+
+  // Authentic N64 RDP 4x4 "magic square" dither matrix (thresholds 0..7).
+  float magicSquare(vec2 fc){
+    int x = int(mod(fc.x, 4.0));
+    int y = int(mod(fc.y, 4.0));
+    int m[16] = int[16](0,4,1,5, 6,2,7,3, 1,5,0,4, 7,3,6,2);
+    return float(m[y*4 + x]);
+  }
+
+  void main(){
+    vec4 col = sample3point(v_uv);
+    float levels = pow(2.0, float(u_bits)) - 1.0;
+    // Dither aligns to FRAMEBUFFER pixels (gl_FragCoord is native res here),
+    // exactly like the RDP, then we truncate to the 5-bit framebuffer.
+    if(u_dither==1){
+      col.rgb += (magicSquare(gl_FragCoord.xy) / 8.0 - 0.4375) / levels;
+    }
+    col.rgb = floor(clamp(col.rgb,0.0,1.0) * levels + 0.5) / levels;
+    col.a = 1.0;
+    fragColor = col; // stored in RDRAM framebuffer texture
+  }`;
+
+  // ---- PASS 2 : VI + DAC (read framebuffer, filter, scan out) ----
+  const fsVI = `#version 300 es
+  precision highp float;
+  in vec2 v_uv; out vec4 fragColor;
+  uniform sampler2D u_fb;      // finished RDP framebuffer (NEAREST)
+  uniform vec2 u_texSize;      // native framebuffer resolution
+  uniform float u_gamma;
+  uniform int u_vi, u_aa, u_crt, u_deblur, u_divot;
+
+  const mat3 RGB2YIQ = mat3(0.299,0.596,0.211, 0.587,-0.274,-0.523, 0.114,-0.322,0.312);
+  const mat3 YIQ2RGB = mat3(1.0,1.0,1.0, 0.956,-0.272,-1.106, 0.621,-0.647,1.703);
+
+  vec4 fb(vec2 uv){ return texture(u_fb, uv); }
+
+  void main(){
+    vec2 uv = v_uv;
+    vec2 tx = vec2(1.0/u_texSize.x, 0.0);
+    vec2 ty = vec2(0.0, 1.0/u_texSize.y);
+    vec4 col = fb(uv);
+
+    // ── Divot filter (VI) ── median of 3 horizontal framebuffer texels,
+    // removing stray single-pixel coverage sparkles on AA'd edges.
+    if(u_divot==1){
+      vec3 l = fb(uv - tx).rgb, c = col.rgb, r = fb(uv + tx).rgb;
+      col.rgb = clamp(max(min(l,c), min(max(l,c), r)), 0.0, 1.0);
+    }
+
+    // ── Coverage-based edge AA (VI) ── only silhouette pixels blend with
+    // neighbours; flat interiors stay crisp.
+    if(u_aa==1){
+      vec4 n = (fb(uv-tx) + fb(uv+tx) + fb(uv-ty) + fb(uv+ty)) * 0.25;
+      float edge = clamp(length(col.rgb - n.rgb) * 3.0, 0.0, 1.0);
+      col = mix(col, n, edge * 0.5);
+    }
+
+    // ── VI horizontal resample / blur ── weighted 5-tap over framebuffer
+    // texels; the main source of N64 softness during scan-out.
+    if(u_vi==1){
+      vec4 h = fb(uv - 2.0*tx)*0.06 + fb(uv - tx)*0.24 + col*0.40
+             + fb(uv + tx)*0.24 + fb(uv + 2.0*tx)*0.06;
+      col = mix(col, h, 0.9);
+    }
+
+    // ── VI de-blur (RGB-mod / dev-kit path) ── partial sharpen.
+    if(u_deblur==1){
+      vec4 blur = fb(uv - tx)*0.25 + col*0.5 + fb(uv + tx)*0.25;
+      col = clamp(col*1.6 - blur*0.6, 0.0, 1.0);
+    }
+
+    // ── NTSC composite bleed (DAC) ── smear chroma (I/Q) while keeping
+    // luma sharp, then a faint scanline for a period CRT capture look.
+    if(u_crt==1){
+      vec3 yiq = RGB2YIQ * col.rgb;
+      vec2 chroma = vec2(0.0); float wsum = 0.0;
+      for(int k = -4; k <= 4; k++){
+        float w = 1.0 - abs(float(k)) / 5.0;
+        chroma += (RGB2YIQ * fb(uv + float(k)*tx).rgb).yz * w;
+        wsum += w;
+      }
+      yiq.yz = chroma / wsum;
+      col.rgb = clamp(YIQ2RGB * yiq, 0.0, 1.0);
+      col.rgb *= 0.90 + 0.10 * step(1.0, mod(gl_FragCoord.y, 2.0));
+    }
+
+    col.rgb = pow(clamp(col.rgb, 0.0, 1.0), vec3(1.0/u_gamma));
+    col.a = 1.0;
+    fragColor = col;
+  }`;
+
+  function compile(type, src) {
+    const s = gl.createShader(type);
+    gl.shaderSource(s, src);
+    gl.compileShader(s);
+    if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) {
+      const log = gl.getShaderInfoLog(s);
+      console.error('Shader compile error:', log);
+      throw new Error(log);
+    }
+    return s;
+  }
+  function makeProgram(fsSrc){
+    const p = gl.createProgram();
+    gl.attachShader(p, compile(gl.VERTEX_SHADER, vs));
+    gl.attachShader(p, compile(gl.FRAGMENT_SHADER, fsSrc));
+    gl.linkProgram(p);
+    if(!gl.getProgramParameter(p, gl.LINK_STATUS)){
+      throw new Error(gl.getProgramInfoLog(p));
+    }
+    return p;
+  }
+  const progRDP = makeProgram(fsRDP);
+  const progVI  = makeProgram(fsVI);
+
+  const quad = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, quad);
+  gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1,-1,1,-1,-1,1,1,1]), gl.STATIC_DRAW);
+  function bindQuad(prog){
+    const loc = gl.getAttribLocation(prog,'a_pos');
+    gl.enableVertexAttribArray(loc);
+    gl.vertexAttribPointer(loc,2,gl.FLOAT,false,0,0);
+  }
+
+  // Source-image texture (input to the RDP pass)
+  const tex = gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D, tex);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+
+  // "RDRAM" framebuffer: an off-screen texture + FBO that Pass 1 renders
+  // into and Pass 2 reads from. Sampled NEAREST so VI taps hit discrete
+  // framebuffer texels, just like the real VI reads discrete RDRAM words.
+  const fbTex = gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D, fbTex);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+  const fbo = gl.createFramebuffer();
+  let fbW = 0, fbH = 0;
+  function ensureFBO(w, h){
+    if(w === fbW && h === fbH) return;
+    fbW = w; fbH = h;
+    gl.bindTexture(gl.TEXTURE_2D, fbTex);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, w, h, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
+    gl.bindFramebuffer(gl.FRAMEBUFFER, fbo);
+    gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, fbTex, 0);
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+  }
+
+  const uR = {
+    tex: gl.getUniformLocation(progRDP,'u_tex'),
+    size: gl.getUniformLocation(progRDP,'u_texSize'),
+    bits: gl.getUniformLocation(progRDP,'u_bits'),
+    p3: gl.getUniformLocation(progRDP,'u_3point'),
+    dith: gl.getUniformLocation(progRDP,'u_dither'),
+  };
+  const uV = {
+    fb: gl.getUniformLocation(progVI,'u_fb'),
+    size: gl.getUniformLocation(progVI,'u_texSize'),
+    gamma: gl.getUniformLocation(progVI,'u_gamma'),
+    vi: gl.getUniformLocation(progVI,'u_vi'),
+    aa: gl.getUniformLocation(progVI,'u_aa'),
+    crt: gl.getUniformLocation(progVI,'u_crt'),
+    deblur: gl.getUniformLocation(progVI,'u_deblur'),
+    divot: gl.getUniformLocation(progVI,'u_divot'),
+  };
+
+  function getTargetRes(){
+    const [w,h] = ui.res.value.split('x').map(Number);
+    return {w,h};
+  }
+
+  function render(){
+    if(!source) return;
+    const {w:tw,h:th} = getTargetRes();
+    lowres.width = tw; lowres.height = th;
+    lowCtx.imageSmoothingEnabled = false;
+    
+    if(isVideo){
+      if(srcVideo.readyState>=2) lowCtx.drawImage(srcVideo,0,0,tw,th);
+    } else {
+      lowCtx.drawImage(source,0,0,tw,th);
+    }
+
+    if(ui.cTMEM.checked){
+      const imageData = lowCtx.getImageData(0, 0, tw, th);
+      const d = imageData.data;
+      for (let i = 0; i < d.length; i += 4) {
+        d[i]     = (d[i] >> 4) << 4;
+        d[i + 1] = (d[i + 1] >> 4) << 4;
+        d[i + 2] = (d[i + 2] >> 4) << 4;
+      }
+      lowCtx.putImageData(imageData, 0, 0);
+    }
+
+    // Upload the source image into the RDP input texture.
+    gl.activeTexture(gl.TEXTURE0);
+    gl.bindTexture(gl.TEXTURE_2D, tex);
+    gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
+    gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA,gl.RGBA,gl.UNSIGNED_BYTE,lowres);
+
+    // ─── PASS 1 : RDP → render the quantised framebuffer into "RDRAM" ───
+    ensureFBO(tw, th);
+    gl.bindFramebuffer(gl.FRAMEBUFFER, fbo);
+    gl.viewport(0, 0, tw, th);
+    gl.useProgram(progRDP);
+    bindQuad(progRDP);
+    gl.uniform1i(uR.tex, 0);
+    gl.uniform2f(uR.size, tw, th);
+    gl.uniform1i(uR.bits, ui.c16.checked ? 5 : 8);
+    gl.uniform1i(uR.p3, ui.c3pt.checked?1:0);
+    gl.uniform1i(uR.dith, ui.cDither.checked?1:0);
+    gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+
+    // ─── PASS 2 : VI/DAC → read framebuffer, filter, scan out to display ───
+    const scale = Math.min(2, Math.floor(720/tw));
+    const ow = tw * Math.max(2,scale), oh = th * Math.max(2,scale);
+    if(outputCanvas.width!==ow || outputCanvas.height!==oh){
+      outputCanvas.width=ow; outputCanvas.height=oh;
+    }
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+    gl.viewport(0,0,ow,oh);
+    gl.useProgram(progVI);
+    bindQuad(progVI);
+    gl.activeTexture(gl.TEXTURE0);
+    gl.bindTexture(gl.TEXTURE_2D, fbTex);
+    gl.uniform1i(uV.fb, 0);
+    gl.uniform2f(uV.size, tw, th);
+    gl.uniform1f(uV.gamma, parseFloat(ui.gamma.value));
+    gl.uniform1i(uV.vi, ui.vi.value==='blur'?1:0);
+    gl.uniform1i(uV.deblur, ui.vi.value==='deblur'?1:0);
+    gl.uniform1i(uV.aa, ui.cAA.checked?1:0);
+    gl.uniform1i(uV.crt, ui.cCRT.checked?1:0);
+    gl.uniform1i(uV.divot, ui.cDivot.checked?1:0);
+    gl.drawArrays(gl.TRIANGLE_STRIP,0,4);
+
+    ui.outRes.textContent = `${tw}×${th}`;
+    ui.outColor.textContent = ui.c16.checked ? 'RGBA5551 (32,768)' : 'RGBA8888 (16,777,216)';
+    ui.outDot.style.background = 'var(--green)'; ui.outDot.style.boxShadow='0 0 6px var(--green)';
+  }
+
+  function drawPreview(){
+    if(!source) return;
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    const pw = previewCanvas.width = previewCanvas.clientWidth * dpr;
+    const ph = previewCanvas.height = previewCanvas.clientHeight * dpr;
+    previewCtx.clearRect(0,0,pw,ph);
+    previewCtx.imageSmoothingEnabled = true;
+    previewCtx.imageSmoothingQuality = 'high';
+    const img = isVideo ? srcVideo : source;
+    const iw = img.videoWidth||img.naturalWidth, ih = img.videoHeight||img.naturalHeight;
+    const s = Math.min(pw/iw, ph/ih);
+    const dw = iw*s, dh = ih*s;
+    previewCtx.drawImage(img, (pw-dw)/2, (ph-dh)/2, dw, dh);
+  }
+
+  function loop(){
+    const needsRender = isVideo && !srcVideo.paused;
+    if (needsRender) {
+      render();
+      drawPreview();
+      animId = requestAnimationFrame(loop);
+    } else if (!isVideo) {
+      if (animId) {
+        cancelAnimationFrame(animId);
+        animId = null;
+      }
+    } else {
+      animId = requestAnimationFrame(loop);
+    }
+  }
+
+  function loadFile(file){
+    stopCamera();
+    const url = URL.createObjectURL(file);
+    ui.inType.textContent = file.type.split('/')[0].toUpperCase();
+    ui.inDot.style.background = 'var(--yellow)'; ui.inDot.style.boxShadow='0 0 6px var(--yellow)';
+    dropzone.style.display='none';
+
+    if(file.type.startsWith('video')){
+      isVideo=true; source=srcVideo;
+      srcVideo.src=url; srcVideo.currentTime=0;
+      srcVideo.onloadedmetadata=()=>{
+        ui.inRes.textContent = `${srcVideo.videoWidth}×${srcVideo.videoHeight}`;
+        ui.inFps.textContent = '30';
+        ui.saveWebm.disabled=false; ui.play.disabled=false;
+      };
+      srcVideo.onseeked=()=>{
+        render(); drawPreview();
+        ui.inDot.style.background='var(--green)'; ui.inDot.style.boxShadow='0 0 6px var(--green)';
+        if (!animId) {
+          animId = requestAnimationFrame(loop);
+        }
+      };
+      srcVideo.load();
+    }else{
+      isVideo=false;
+      const img = new Image();
+      img.onload=()=>{
+        source=img;
+        ui.inRes.textContent = `${img.naturalWidth}×${img.naturalHeight}`;
+        ui.inFps.textContent = '—';
+        ui.savePng.disabled=false; ui.play.disabled=true;
+        render(); drawPreview();
+        ui.inDot.style.background='var(--green)'; ui.inDot.style.boxShadow='0 0 6px var(--green)';
+        if (!animId) {
+          animId = requestAnimationFrame(loop);
+        }
+      };
+      img.src=url;
+    }
+  }
+
+  function clearSource(){
+    if (animId) { cancelAnimationFrame(animId); animId = null; }
+    if (isVideo) {
+      srcVideo.pause();
+      srcVideo.removeAttribute('src');
+      srcVideo.load();
+    }
+    source = null;
+    isVideo = false;
+    dropzone.style.display = '';
+    previewCtx.clearRect(0,0,previewCanvas.width,previewCanvas.height);
+    ui.inRes.textContent = '—';
+    ui.inType.textContent = '—';
+    ui.inFps.textContent = '—';
+    ui.inDot.style.background = '#666'; ui.inDot.style.boxShadow = 'none';
+    ui.savePng.disabled = true;
+    ui.saveWebm.disabled = true;
+    ui.play.disabled = true;
+    // reset output dot
+    ui.outDot.style.background = '#666'; ui.outDot.style.boxShadow = 'none';
+    // clear output canvas with a neutral color
+    const {w,h}=getTargetRes();
+    outputCanvas.width = w*2; outputCanvas.height = h*2;
+    gl.clearColor(0.05,0.05,0.05,1); gl.clear(gl.COLOR_BUFFER_BIT);
+  }
+
+  // UI wiring
+  dropzone.addEventListener('click',()=>fileInput.click());
+  ui.browse.addEventListener('click',()=>fileInput.click());
+  fileInput.addEventListener('change',e=> e.target.files[0] && loadFile(e.target.files[0]));
+  ui.clear.addEventListener('click', clearSource);
+
+  ['dragover','dragenter'].forEach(ev=>dropArea.addEventListener(ev,e=>{e.preventDefault();dropzone.classList.add('drag');}));
+  ['dragleave','drop'].forEach(ev=>dropArea.addEventListener(ev,e=>{e.preventDefault();dropzone.classList.remove('drag');}));
+  dropArea.addEventListener('drop',e=>{ const f=e.dataTransfer.files[0]; if(f) loadFile(f); });
+
+  // ── Camera ──
+  function stopCamera() {
+    if (cameraStream) {
+      cameraStream.getTracks().forEach(t => t.stop());
+      cameraStream = null;
+    }
+    srcVideo.srcObject = null;
+    ui.camera.classList.remove('camera-active');
+    ui.camera.textContent = '⊙ Live Camera';
+  }
+
+  ui.camera.addEventListener('click', async () => {
+    if (cameraStream) {
+      stopCamera();
+      clearSource();
+      return;
+    }
+    if (isVideo) { srcVideo.pause(); srcVideo.src = ''; }
+    try {
+      cameraStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+      srcVideo.srcObject = cameraStream;
+      srcVideo.muted = true; srcVideo.loop = false;
+      isVideo = true; source = srcVideo;
+      dropzone.style.display = 'none';
+      ui.camera.classList.add('camera-active');
+      ui.camera.textContent = '⊙ Stop Camera';
+      ui.inType.textContent = 'CAMERA';
+      ui.inFps.textContent = 'LIVE';
+      ui.play.disabled = true;
+      ui.savePng.disabled = false;
+      srcVideo.onloadedmetadata = () => {
+        ui.inRes.textContent = `${srcVideo.videoWidth}×${srcVideo.videoHeight}`;
+        ui.inDot.style.background = 'var(--green)'; ui.inDot.style.boxShadow = '0 0 6px var(--green)';
+        srcVideo.play();
+        if (!animId) animId = requestAnimationFrame(loop);
+      };
+      srcVideo.load();
+    } catch(e) {
+      alert('Camera access denied: ' + (e.message || e));
+      cameraStream = null;
+    }
+  });
+
+  [ui.res,ui.vi,ui.gamma,ui.c16,ui.c3pt,ui.cDither,ui.cAA,ui.cDivot,ui.cCRT,ui.cTMEM].forEach(el=>{
+    el.addEventListener('input',()=>{ ui.gammaVal.textContent = parseFloat(ui.gamma.value).toFixed(2); render(); });
+    el.addEventListener('change',render);
+  });
+
+  ui.preset.addEventListener('click',()=>{
+    ui.res.value='320x240'; ui.vi.value='blur'; ui.gamma.value='1.2'; ui.gammaVal.textContent='1.20';
+    ui.c16.checked=true; ui.c3pt.checked=true; ui.cDither.checked=true; ui.cAA.checked=true; ui.cDivot.checked=true; ui.cCRT.checked=false; ui.cTMEM.checked=true;
+    render();
+  });
+
+  ui.play.addEventListener('click',()=>{ if(!isVideo) return; srcVideo.paused ? srcVideo.play() : srcVideo.pause(); });
+
+  ui.savePng.addEventListener('click',()=>{
+    outputCanvas.toBlob(b=>{
+      const a=document.createElement('a'); a.href=URL.createObjectURL(b); a.download='n64-authentic.png'; a.click();
+    },'image/png');
+  });
+
+  ui.saveWebm.addEventListener('click',async()=>{
+    if(!isVideo) return;
+    ui.saveWebm.disabled=true; ui.saveWebm.textContent='Recording...';
+    const wasLoop = srcVideo.loop;
+    srcVideo.loop = false;
+    const stream = outputCanvas.captureStream(30);
+    const chunks=[]; recorder = new MediaRecorder(stream,{mimeType:'video/webm;codecs=vp9'});
+    recorder.ondataavailable=e=>chunks.push(e.data);
+    recorder.onstop=()=>{
+      const blob=new Blob(chunks,{type:'video/webm'});
+      const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='n64-authentic.webm'; a.click();
+      ui.saveWebm.disabled=false; ui.saveWebm.textContent='Save WebM (Video)';
+      srcVideo.loop = wasLoop;
+    };
+    srcVideo.currentTime=0; await srcVideo.play(); recorder.start();
+    srcVideo.onended=()=>{ recorder.stop(); srcVideo.onended=null; };
+  });
+
+  function init(){
+    const {w,h}=getTargetRes();
+    outputCanvas.width=w*2; outputCanvas.height=h*2;
+    gl.clearColor(0.05,0.05,0.05,1); gl.clear(gl.COLOR_BUFFER_BIT);
+    previewCanvas.width=640; previewCanvas.height=480;
+    previewCtx.fillStyle='#0a0a0a'; previewCtx.fillRect(0,0,640,480);
+    previewCtx.fillStyle='#444'; previewCtx.font='14px monospace'; previewCtx.textAlign='center';
+    previewCtx.fillText('DROP IMAGE OR VIDEO',320,240);
+  }
+  init();
+  window.addEventListener('resize',()=>{ drawPreview(); render(); });
+})();
+</script>
+</body>
+</html>
