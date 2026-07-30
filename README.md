@@ -2,7 +2,7 @@
 
 > Signal Processing · Retro Rendering · Texture Restoration · Chiptune
 
-A suite of four client-side browser instruments for applying authentic analog, retro, and lo-fi character to images, video, and audio. No server. No dependencies. No data collected. Open a file and run.
+A suite of three client-side browser instruments for applying authentic analog, retro, and lo-fi character to images, video, and audio. No server. No dependencies. No data collected. Open a file and run.
 
 ---
 
@@ -32,39 +32,3 @@ WebGL-accelerated CRT simulation with configurable presets. Renders scanlines, s
 Emulates the RCP rendering pipeline of the Nintendo 64, low-poly vertex jitter, texture warping, limited color depth, Z-fighting artifacts, and point-sampled (3-point) filtering. For images that feel like they escaped a cartridge.
 
 `RCP Pipeline` `Vertex Jitter` `Dithering` `3-Point Filter`
-
----
-
-### AFL-004 · GB Note Player
-**Handheld chiptune sequencer**
-
-A Game Boy–style piano-roll instrument with per-channel waveform control, pulse width modulation, and envelope shaping. Rendered in DMG green palette with atomic purple housing aesthetic. Compose and export chiptune sequences directly in the browser.
-
-`Chiptune` `Piano Roll` `Waveform` `DMG Palette` `Envelope`
-
----
-
-## Usage
-
-All instruments are self-contained HTML files. No build step, no install.
-
-```
-git clone https://github.com/Kasai-Kitsune/Analog-fidelity-Lab.git
-cd Analog-fidelity-Lab
-```
-
-Open `index.html` in any modern browser. Click an instrument card to launch it. That's it.
-
-Alternatively, each `.html` file can be opened directly on its own.
-
----
-
-## Design Philosophy
-
-Everything runs locally in the browser. No telemetry or no network calls; just open a file and use it. The instruments are intentionally self-contained so they work offline, stay private, and don't depend on anything that can go away.
-
----
-
-## License
-
-MIT — see [LICENSE](LICENSE)
